@@ -10,7 +10,7 @@ from src.apps.assets_journal.domain.enums import (
 
 class StationaryAssetDomain:
     """
-    Доменная модель актива стационара (под новые requests)
+    Доменная модель актива стационара
     """
 
     def __init__(
@@ -19,30 +19,31 @@ class StationaryAssetDomain:
             id: Optional[UUID] = None,
 
             # Данные из BG
-            bg_asset_id: str,
-            card_number: str,
+            bg_asset_id: Optional[str] = None,
+            card_number: Optional[str] = None,
 
             # Данные о пациенте
             patient_full_name: str,
             patient_iin: str,
             patient_birth_date: datetime,
-            patient_address: str,
+            patient_address: Optional[str] = None,
 
             # Данные о получении актива
             receive_date: datetime,
             receive_time: time,
-            actual_datetime: Optional[datetime] = None,
+            actual_datetime: datetime,
             received_from: str,
-            is_repeat: bool = False,
+            is_repeat: bool,
 
             # Данные пребывания в стационаре
-            stay_period_start: Optional[datetime] = None,
+            stay_period_start: datetime,
             stay_period_end: Optional[datetime] = None,
-            stay_outcome: str,
+            stay_outcome: Optional[str] = None,
             diagnosis: str,
 
             # Участок и специалист
             area: str,
+            specialization: str,
             specialist: str,
 
             # Примечание
@@ -78,6 +79,7 @@ class StationaryAssetDomain:
         self.stay_outcome = stay_outcome
         self.diagnosis = diagnosis
         self.area = area
+        self.specialization = specialization
         self.specialist = specialist
         self.note = note
         self.status = status
@@ -123,7 +125,8 @@ class StationaryAssetDomain:
         """Отказать в активе"""
         self.has_refusal = True
         self.status = AssetStatusEnum.REFUSED
-        self.note = f"Отказ: {reason}" + (f"\n{self.note}" if self.note else "")
+        current_note = self.note or ""
+        self.note = f"Отказ: {reason}" + (f"\n{current_note}" if current_note else "")
         self.updated_at = datetime.utcnow()
 
     @property
@@ -137,8 +140,10 @@ class StationaryAssetDomain:
         return self.has_refusal
 
     @property
-    def patient_age(self) -> int:
+    def patient_age(self) -> Optional[int]:
         """Вычислить возраст пациента"""
+        if not self.patient_birth_date:
+            return None
         today = datetime.now().date()
         birth_date = self.patient_birth_date.date()
         age = today.year - birth_date.year
@@ -147,25 +152,14 @@ class StationaryAssetDomain:
         return age
 
     @property
-    def receive_datetime(self) -> datetime:
+    def receive_datetime(self) -> Optional[datetime]:
         """Объединенная дата и время получения"""
         if self.actual_datetime:
             return self.actual_datetime
-        # Объединяем дату и время
-        return datetime.combine(self.receive_date.date(), self.receive_time)
-
-    @property
-    def additional_info(self) -> dict:
-        """Дополнительная информация для UI"""
-        return {
-            "area": self.area,
-            "specialist": self.specialist,
-            "diagnosis": self.diagnosis,
-            "stay_outcome": self.stay_outcome,
-            "status": self._get_status_display(),
-            "delivery_status": self._get_delivery_status_display(),
-            "is_repeat": self.is_repeat
-        }
+        if self.receive_date and self.receive_time:
+            # Объединяем дату и время
+            return datetime.combine(self.receive_date.date(), self.receive_time)
+        return None
 
     def _get_status_display(self) -> str:
         """Получить отображаемое название статуса"""
@@ -185,3 +179,43 @@ class StationaryAssetDomain:
             AssetDeliveryStatusEnum.DELIVERED: "Доставлен",
         }
         return status_map.get(self.delivery_status, "Неизвестно")
+
+
+class StationaryAssetListItemDomain:
+    """
+    Доменная модель для списка активов стационара
+    """
+
+    def __init__(
+            self,
+            id: UUID,
+            card_number: str,
+            patient_full_name: str,
+            patient_iin: str,
+            patient_birth_date: datetime,
+            specialization: str,
+            specialist: str,
+            area: str,
+            diagnosis: str,
+            status: AssetStatusEnum,
+            delivery_status: AssetDeliveryStatusEnum,
+            receive_date: datetime,
+            receive_time: time,
+            created_at: datetime,
+            updated_at: datetime,
+    ):
+        self.id = id
+        self.card_number = card_number
+        self.patient_full_name = patient_full_name
+        self.patient_iin = patient_iin
+        self.patient_birth_date = patient_birth_date
+        self.specialization = specialization
+        self.specialist = specialist
+        self.area = area
+        self.diagnosis = diagnosis
+        self.status = status
+        self.delivery_status = delivery_status
+        self.receive_date = receive_date
+        self.receive_time = receive_time
+        self.created_at = created_at
+        self.updated_at = updated_at

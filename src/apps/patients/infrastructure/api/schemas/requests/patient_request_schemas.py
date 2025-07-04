@@ -11,6 +11,7 @@ from src.apps.patients.domain.enums import (
 )
 from src.apps.patients.infrastructure.api.schemas.jsonb_fields_schemas import (
     PatientAddressItemSchema,
+    PatientAttachmentDataItemSchema,
     PatientContactInfoItemSchema,
     PatientRelativeItemSchema,
 )
@@ -36,10 +37,10 @@ class CreatePatientSchema(BaseModel):
     citizenship_id: int
     nationality_id: int
     financing_sources_ids: List[int]
-    context_attributes_ids: List[int]
+    context_attributes_ids: Optional[List[int]] = None
     social_status: Optional[PatientSocialStatusEnum] = None
     marital_status: Optional[PatientMaritalStatusEnum] = None
-    attached_clinic_id: int
+    attachment_data: Optional[PatientAttachmentDataItemSchema] = None
     relatives: Optional[List[PatientRelativeItemSchema]] = None
     addresses: Optional[List[PatientAddressItemSchema]] = None
     contact_info: Optional[List[PatientContactInfoItemSchema]] = None
@@ -90,12 +91,15 @@ class CreatePatientSchema(BaseModel):
                 "date_of_birth": "1985-07-14",
                 "gender": "male",
                 "citizenship_id": 1,
-                "nationality_id": 2,
-                "financing_sources_ids": [7, 8],
-                "context_attributes_ids": [101, 102],
+                "nationality_id": 1,
+                "financing_sources_ids": [1],
+                "context_attributes_ids": [1],
                 "social_status": "employed",
                 "marital_status": "married",
-                "attached_clinic_id": 5,
+                "attachment_data": {
+                    "area_number": 12,
+                    "attached_clinic_id": 1,
+                },
                 "relatives": [
                     {
                         "type": "mother",
@@ -136,7 +140,7 @@ class UpdatePatientSchema(BaseModel):
     context_attributes_ids: Optional[List[int]] = None
     social_status: Optional[PatientSocialStatusEnum] = None
     marital_status: Optional[PatientMaritalStatusEnum] = None
-    attached_clinic_id: Optional[int] = None
+    attachment_data: Optional[PatientAttachmentDataItemSchema] = None
     relatives: Optional[List[PatientRelativeItemSchema]] = None
     addresses: Optional[List[PatientAddressItemSchema]] = None
     contact_info: Optional[List[PatientContactInfoItemSchema]] = None
@@ -171,7 +175,10 @@ class UpdatePatientSchema(BaseModel):
                 "first_name": "Иван",
                 "last_name": "Иванов",
                 "middle_name": "Иванович",
-                "attached_clinic_id": 6,
+                "attachment_data": {
+                    "area_number": 13,
+                    "attached_clinic_id": 1,
+                },
                 "social_status": "retired",
                 "profile_status": "inactive",
             }

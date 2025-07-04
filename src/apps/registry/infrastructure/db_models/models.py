@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Dict, List
 
 from sqlalchemy import UUID as sqlalchemy_UUID
@@ -16,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.sqltypes import DateTime
 
 from src.apps.registry.domain.enums import (
     AppointmentInsuranceType,
@@ -109,7 +110,7 @@ class Appointment(Base, CreatedAtMixin, ChangedAtMixin):
     time: Mapped[time] = mapped_column(Time, nullable=False)
     patient_id: Mapped[uuid.UUID] = mapped_column(
         sqlalchemy_UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("patients.id", ondelete="CASCADE"),
         nullable=True,
     )  # User's id from the Auth Service
     status: Mapped[AppointmentStatusEnum] = mapped_column(
@@ -129,8 +130,13 @@ class Appointment(Base, CreatedAtMixin, ChangedAtMixin):
         ForeignKey("schedule_days.id", ondelete="CASCADE"), nullable=False
     )
 
-    patient: Mapped["User"] = relationship(
-        "User",
+    # Optional field to track when the appointment was cancelled (updatable only by the server)
+    cancelled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    patient: Mapped["SQLAlchemyPatient"] = relationship(
+        "SQLAlchemyPatient",
         back_populates="appointments",
         foreign_keys=[patient_id],
         lazy="joined",

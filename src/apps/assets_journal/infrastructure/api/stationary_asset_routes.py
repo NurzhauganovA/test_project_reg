@@ -16,9 +16,13 @@ from src.apps.assets_journal.infrastructure.api.schemas.requests.stationary_asse
 from src.apps.assets_journal.infrastructure.api.schemas.responses.stationary_asset_schemas import (
     MultipleStationaryAssetsResponseSchema,
     StationaryAssetResponseSchema,
+    StationaryAssetListItemSchema,
     StationaryAssetStatisticsSchema,
 )
-from src.apps.assets_journal.mappers import map_stationary_asset_domain_to_response
+from src.apps.assets_journal.mappers import (
+    map_stationary_asset_domain_to_full_response,
+    map_stationary_asset_domain_to_list_item,
+)
 from src.apps.assets_journal.services.stationary_asset_service import (
     StationaryAssetService,
 )
@@ -34,7 +38,7 @@ stationary_assets_router = APIRouter()
 @stationary_assets_router.get(
     "/stationary-assets/{asset_id}",
     response_model=StationaryAssetResponseSchema,
-    summary="Получить актив стационара по ID",
+    summary="Получить актив стационара по ID (детальный просмотр)",
     # dependencies=[
     #     Depends(
     #         check_user_permissions(
@@ -50,9 +54,9 @@ async def get_stationary_asset_by_id(
         Provide[AssetsJournalContainer.stationary_asset_service]
     ),
 ) -> StationaryAssetResponseSchema:
-    """Получить актив стационара по ID"""
+    """Получить актив стационара по ID (полная информация)"""
     asset = await stationary_asset_service.get_by_id(asset_id)
-    return map_stationary_asset_domain_to_response(asset)
+    return map_stationary_asset_domain_to_full_response(asset)
 
 
 @stationary_assets_router.get(
@@ -75,7 +79,7 @@ async def get_stationary_assets(
         Provide[AssetsJournalContainer.stationary_asset_service]
     ),
 ) -> MultipleStationaryAssetsResponseSchema:
-    """Получить список активов стационара с фильтрацией и пагинацией"""
+    """Получить список активов стационара с фильтрацией и пагинацией (упрощенная информация)"""
     assets, total_count = await stationary_asset_service.get_assets(
         pagination_params=pagination_params,
         filter_params=filter_params,
@@ -97,15 +101,16 @@ async def get_stationary_assets(
         has_prev=has_prev,
     )
 
+    # Используем маппинг для списка
     return MultipleStationaryAssetsResponseSchema(
-        items=[map_stationary_asset_domain_to_response(asset) for asset in assets],
+        items=[map_stationary_asset_domain_to_list_item(asset) for asset in assets],
         pagination=pagination_metadata,
     )
 
 
 @stationary_assets_router.post(
     "/stationary-assets",
-    response_model=StationaryAssetResponseSchema,
+    response_model=StationaryAssetListItemSchema,  # Возвращаем упрощенную схему
     status_code=status.HTTP_201_CREATED,
     summary="Создать новый актив стационара",
     # dependencies=[
@@ -122,10 +127,10 @@ async def create_stationary_asset(
     stationary_asset_service: StationaryAssetService = Depends(
         Provide[AssetsJournalContainer.stationary_asset_service]
     ),
-) -> StationaryAssetResponseSchema:
+) -> StationaryAssetListItemSchema:
     """Создать новый актив стационара"""
     asset = await stationary_asset_service.create_asset(create_schema)
-    return map_stationary_asset_domain_to_response(asset)
+    return map_stationary_asset_domain_to_list_item(asset)
 
 
 @stationary_assets_router.patch(
@@ -150,7 +155,7 @@ async def update_stationary_asset(
 ) -> StationaryAssetResponseSchema:
     """Обновить актив стационара"""
     asset = await stationary_asset_service.update_asset(asset_id, update_schema)
-    return map_stationary_asset_domain_to_response(asset)
+    return map_stationary_asset_domain_to_full_response(asset)
 
 
 @stationary_assets_router.delete(
@@ -220,12 +225,12 @@ async def confirm_stationary_asset(
 ) -> StationaryAssetResponseSchema:
     """Подтвердить актив стационара"""
     asset = await stationary_asset_service.confirm_asset(asset_id)
-    return map_stationary_asset_domain_to_response(asset)
+    return map_stationary_asset_domain_to_full_response(asset)
 
 
 @stationary_assets_router.post(
     "/stationary-assets/load-from-bg",
-    response_model=List[StationaryAssetResponseSchema],
+    response_model=List[StationaryAssetListItemSchema],
     summary="Загрузить активы из файла BG (временно)",
     # dependencies=[
     #     Depends(
@@ -240,10 +245,10 @@ async def load_stationary_assets_from_bg(
     stationary_asset_service: StationaryAssetService = Depends(
         Provide[AssetsJournalContainer.stationary_asset_service]
     ),
-) -> List[StationaryAssetResponseSchema]:
+) -> List[StationaryAssetListItemSchema]:
     """
     Загрузить активы из файла BG (временная функция для тестирования)
     Позже будет заменена на интеграцию с BG API
     """
     assets = await stationary_asset_service.load_assets_from_bg_file()
-    return [map_stationary_asset_domain_to_response(asset) for asset in assets]
+    return [map_stationary_asset_domain_to_list_item(asset) for asset in assets]

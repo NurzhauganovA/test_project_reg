@@ -8,6 +8,8 @@ from src.apps.platform_rules.infrastructure.api.schemas.responses.platform_rules
 from src.apps.platform_rules.interfaces.platform_rules_repository_interface import (
     PlatformRulesRepositoryInterface,
 )
+from src.apps.registry.domain.enums import AppointmentStatusEnum
+from src.apps.registry.domain.models.appointment import AppointmentDomain
 from src.apps.registry.domain.models.schedule import ScheduleDomain
 from src.apps.registry.exceptions import (
     NoInstanceFoundError,
@@ -15,12 +17,12 @@ from src.apps.registry.exceptions import (
     ScheduleInvalidUpdateDatesError,
     ScheduleNameIsAlreadyTakenError,
 )
+from src.apps.registry.infrastructure.api.schemas.requests.filters.schedule_filter_params import (
+    ScheduleFilterParams,
+)
 from src.apps.registry.infrastructure.api.schemas.requests.schedule_day_schemas import (
     CreateScheduleDaySchema,
     ScheduleDayTemplateSchema,
-)
-from src.apps.registry.infrastructure.api.schemas.requests.schedule_filter_params import (
-    ScheduleFilterParams,
 )
 from src.apps.registry.infrastructure.api.schemas.requests.schedule_schemas import (
     CreateScheduleSchema,
@@ -177,6 +179,13 @@ class ScheduleService:
 
         return result
 
+    async def _move_appointments_to_waiting_list(
+        self, appointments: List[AppointmentDomain]
+    ):
+        for appointment in appointments:
+            appointment.status = AppointmentStatusEnum.CANCELLED
+            await self._appointment_repository.update(appointment)
+
     async def get_by_id(self, schedule_id: UUID) -> List[ScheduleDomain | UserDomain]:
         """
         Retrieves a schedule by its ID.
@@ -238,16 +247,14 @@ class ScheduleService:
 
         :return: List of ScheduleDomain and UserDomain (doctor) objects.
         """
-        # TODO: Add roles checking in the future
-        # # Check if a user exists and has a doctor role
-        # existing_user = await self._user_service.get_by_id(doctor_id)
-        # is_doctor = "doctor" in [role.lower() for role in existing_user.client_roles]
-        # if not existing_user or not is_doctor:
-        #     raise NoInstanceFoundError(
-        #         status_code=404,
-        #         detail=_("User with ID: %(ID)s not found or not a doctor.")
-        #         % {"ID": doctor_id},
-        #     )
+        # Check if a doctor exists
+        existing_user = await self._user_service.get_by_id(doctor_id)
+        if not existing_user:
+            raise NoInstanceFoundError(
+                status_code=404,
+                detail=_("User with ID: %(ID)s not found or not a doctor.")
+                % {"ID": doctor_id},
+            )
 
         # Check if a user already has a schedule with the same schedule name
         schedule_with_same_name = await self._schedule_repository.get_schedules(
@@ -435,6 +442,13 @@ class ScheduleService:
                     % {"MAX_VALUE": max_schedule_period_days},
                 )
 
+        # Check if 'is_active' field value changes from True to False
+        is_deactivating = (
+            "is_active" in update_schema.model_fields_set
+            and schedule.is_active
+            and update_schema.is_active is False
+        )
+
         # Updating fields...
         for field, value in update_schema.model_dump(exclude_unset=True).items():
             setattr(schedule, field, value)
@@ -487,11 +501,44 @@ class ScheduleService:
                 days_to_delete.append(day.id)
 
         async with self._uow:
+            if is_deactivating:
+                for day in existing_days:
+                    appointments = (
+                        await self._appointment_repository.get_appointments_by_day_id(
+                            day.id
+                        )
+                    )
+                    booked_appointments = [
+                        appointment
+                        for appointment in appointments
+                        if appointment.status == AppointmentStatusEnum.BOOKED
+                    ]
+
+                    if booked_appointments:
+                        await self._move_appointments_to_waiting_list(
+                            booked_appointments
+                        )
+
             updated_schedule = await self._uow.schedule_repository.update(schedule)
+
             for day_schema in days_to_add:
                 await self._uow.schedule_day_repository.add(day_schema)
+
             for day_id in days_to_delete:
-                # TODO: Move this day's appointment entries to the "WAITING LIST"
+                appointments = (
+                    await self._appointment_repository.get_appointments_by_day_id(
+                        day_id
+                    )
+                )
+                booked_appointments = [
+                    appointment
+                    for appointment in appointments
+                    if appointment.status == AppointmentStatusEnum.BOOKED
+                ]
+
+                if booked_appointments:
+                    await self._move_appointments_to_waiting_list(booked_appointments)
+
                 await self._uow.schedule_day_repository.delete_by_id(day_id)
 
         return [updated_schedule, doctor_domain]
@@ -507,7 +554,23 @@ class ScheduleService:
                 detail=_("Schedule with ID: %(ID)s not found.") % {"ID": schedule_id},
             )
 
-        # TODO: Move this day's appointment entries to the "WAITING LIST"
+        days = await self._schedule_day_repository.get_all_by_schedule_id(
+            schedule_id, limit=1000, page=1
+        )
+        for day in days:
+            appointments = (
+                await self._appointment_repository.get_appointments_by_day_id(day.id)
+            )
+            booked_appointments = [
+                appointment
+                for appointment in appointments
+                if appointment.status == AppointmentStatusEnum.BOOKED
+            ]
+            if booked_appointments:
+                await self._move_appointments_to_waiting_list(booked_appointments)
+
+        async with self._uow:
+            await self._schedule_repository.delete(schedule_id)
 
         async with self._uow:
             # Delete the schedule itself

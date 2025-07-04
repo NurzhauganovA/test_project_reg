@@ -12,6 +12,9 @@ def map_user_domain_to_db_entity(user: UserDomain) -> User:
         first_name=user.first_name,
         last_name=user.last_name,
         middle_name=user.middle_name,
+        full_name=" ".join(
+            filter(None, [user.last_name, user.first_name, user.middle_name or ""])
+        )[:256],
         iin=user.iin,
         date_of_birth=user.date_of_birth,
         client_roles=user.client_roles,

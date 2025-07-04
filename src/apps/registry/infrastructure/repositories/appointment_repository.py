@@ -1,8 +1,7 @@
-from datetime import date
-from typing import List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import joinedload
 
 from src.apps.registry.domain.models.appointment import AppointmentDomain
@@ -15,6 +14,49 @@ from src.shared.infrastructure.base import BaseRepository
 
 
 class AppointmentRepositoryImpl(BaseRepository, AppointmentRepositoryInterface):
+    _filters_map: Dict[str, Callable[[Any], Any]] = {
+        "schedule_id": lambda value: AppointmentRepositoryImpl._filter_by_schedule_id(
+            value
+        ),
+        "period_start": lambda value: AppointmentRepositoryImpl._filter_by_period_start(
+            value
+        ),
+        "period_end": lambda value: AppointmentRepositoryImpl._filter_by_period_end(
+            value
+        ),
+        "appointment_status_filter": lambda value: AppointmentRepositoryImpl._filter_by_status(
+            value
+        ),
+    }
+
+    @staticmethod
+    def _filter_by_schedule_id(value):
+        return ScheduleDay.schedule_id == value
+
+    @staticmethod
+    def _filter_by_period_start(value):
+        return ScheduleDay.date >= value
+
+    @staticmethod
+    def _filter_by_period_end(value):
+        return ScheduleDay.date <= value
+
+    @staticmethod
+    def _filter_by_status(value):
+        return Appointment.status == value
+
+    def _build_filters(self, filters: dict) -> list:
+        conditions = []
+        for key, value in filters.items():
+            if value is None:
+                continue
+
+            filter_function = self._filters_map.get(key)
+            if filter_function:
+                conditions.append(filter_function(value))
+
+        return conditions
+
     async def get_total_number_of_appointments(self) -> int:
         query = select(func.count(Appointment.id))
         result = await self._async_db_session.execute(query)
@@ -63,25 +105,22 @@ class AppointmentRepositoryImpl(BaseRepository, AppointmentRepositoryInterface):
 
         return [map_appointment_db_entity_to_domain(row) for row in rows]
 
-    async def get_by_schedule_id_and_period(
+    async def get_appointments(
         self,
-        schedule_id: UUID,
-        period_start: date,
-        period_end: date,
+        filters: dict,
         limit: int = 30,
         page: int = 1,
-    ) -> List[AppointmentDomain]:
+    ):
         stmt = (
             select(Appointment)
             .join(Appointment.schedule_day)
-            .where(
-                ScheduleDay.schedule_id == schedule_id,
-                ScheduleDay.date >= period_start,
-                ScheduleDay.date <= period_end,
-            )
             .options(joinedload(Appointment.schedule_day))
             .order_by(ScheduleDay.date, Appointment.time)
         )
+
+        conditions = self._build_filters(filters)
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
 
         stmt = stmt.limit(limit).offset((page - 1) * limit)
 
@@ -100,6 +139,7 @@ class AppointmentRepositoryImpl(BaseRepository, AppointmentRepositoryInterface):
             insurance_type=appointment.insurance_type,
             reason=appointment.reason,
             additional_services=appointment.additional_services,
+            cancelled_at=appointment.cancelled_at,
         )
         self._async_db_session.add(new_appointment)
         await self._async_db_session.flush()
@@ -113,15 +153,25 @@ class AppointmentRepositoryImpl(BaseRepository, AppointmentRepositoryInterface):
         )
         existing = result.scalar_one_or_none()
 
+        fields_to_update = [
+            "schedule_day_id",
+            "time",
+            "patient_id",
+            "status",
+            "type",
+            "insurance_type",
+            "reason",
+            "additional_services",
+            "cancelled_at",
+        ]
+
+        self._logger.debug(
+            f"Updating appointment with ID {appointment.id} with fields: {appointment.__dict__}"
+        )
+
         # Updating fields...
-        existing.schedule_day_id = appointment.schedule_day_id
-        existing.time = appointment.time
-        existing.patient_id = appointment.patient_id
-        existing.status = appointment.status
-        existing.type = appointment.type
-        existing.insurance_type = appointment.insurance_type
-        existing.reason = appointment.reason
-        existing.additional_services = appointment.additional_services
+        for field in fields_to_update:
+            setattr(existing, field, getattr(appointment, field))
 
         self._async_db_session.add(existing)
         await self._async_db_session.flush()

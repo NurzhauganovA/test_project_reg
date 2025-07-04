@@ -13,10 +13,6 @@ class AppointmentIsNotAvailableError(AppointmentError):
     pass
 
 
-class AppointmentIsNotBookedError(AppointmentError):
-    pass
-
-
 # ScheduleDomain errors
 class ScheduleError(DomainError):
     pass
@@ -30,7 +26,11 @@ class ScheduleValidationError(ScheduleError):
     pass
 
 
-class ScheduleDayNotFoundError(ScheduleError):
+class ScheduleDayIsNotActiveError(ScheduleError):
+    pass
+
+
+class ScheduleIsNotActiveError(DomainError):
     pass
 
 

@@ -4,7 +4,7 @@ from typing import List, Tuple
 from uuid import UUID
 
 from src.apps.assets_journal.domain.enums import AssetDeliveryStatusEnum, AssetStatusEnum
-from src.apps.assets_journal.domain.models.stationary_asset import StationaryAssetDomain
+from src.apps.assets_journal.domain.models.stationary_asset import StationaryAssetDomain, StationaryAssetListItemDomain
 from src.apps.assets_journal.infrastructure.api.schemas.requests.stationary_asset_filter_params import (
     StationaryAssetFilterParams,
 )
@@ -61,7 +61,7 @@ class StationaryAssetService:
             self,
             pagination_params: PaginationParams,
             filter_params: StationaryAssetFilterParams,
-    ) -> Tuple[List[StationaryAssetDomain], int]:
+    ) -> Tuple[List[StationaryAssetListItemDomain], int]:
         """
         Получить список активов с фильтрацией и пагинацией
 

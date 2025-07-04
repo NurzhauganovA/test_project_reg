@@ -26,38 +26,39 @@ class StationaryAsset(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     card_number: Mapped[str] = mapped_column(String(50), nullable=True)
 
     # Данные пациента
-    patient_full_name: Mapped[str] = mapped_column(String(255), nullable=True)
-    patient_iin: Mapped[str] = mapped_column(String(12), nullable=True)
-    patient_birth_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    patient_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    patient_iin: Mapped[str] = mapped_column(String(12), nullable=False)
+    patient_birth_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     patient_address: Mapped[str] = mapped_column(Text, nullable=True)
 
     # Данные о получении актива
-    receive_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    receive_time: Mapped[time] = mapped_column(Time, nullable=True)
-    actual_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    received_from: Mapped[str] = mapped_column(String(255), nullable=True)
-    is_repeat: Mapped[bool] = mapped_column(Boolean, nullable=True, default=True)
+    receive_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    receive_time: Mapped[time] = mapped_column(Time, nullable=False)
+    actual_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_from: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_repeat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Данные пребывания в стационаре
-    stay_period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    stay_period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     stay_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     stay_outcome: Mapped[str] = mapped_column(String(255), nullable=True)
-    diagnosis: Mapped[str] = mapped_column(Text, nullable=True)
+    diagnosis: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Участок и специалист
-    area: Mapped[str] = mapped_column(String(255), nullable=True)
-    specialist: Mapped[str] = mapped_column(String(255), nullable=True)
+    area: Mapped[str] = mapped_column(String(255), nullable=False)
+    specialization: Mapped[str] = mapped_column(String(255), nullable=True)
+    specialist: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Примечание
     note: Mapped[str] = mapped_column(Text, nullable=True)
 
     # Статусы
     status: Mapped[AssetStatusEnum] = mapped_column(
-        Enum(AssetStatusEnum), nullable=True, default=AssetStatusEnum.REGISTERED
+        Enum(AssetStatusEnum), nullable=False, default=AssetStatusEnum.REGISTERED
     )
     delivery_status: Mapped[AssetDeliveryStatusEnum] = mapped_column(
         Enum(AssetDeliveryStatusEnum),
-        nullable=True,
+        nullable=False,
         default=AssetDeliveryStatusEnum.RECEIVED_AUTOMATICALLY
     )
     reg_date: Mapped[datetime] = mapped_column(
@@ -65,6 +66,6 @@ class StationaryAsset(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     )
 
     # Флаги для совместимости с BG
-    has_confirm: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
-    has_files: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
-    has_refusal: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
+    has_confirm: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    has_files: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    has_refusal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

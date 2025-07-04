@@ -1,13 +1,14 @@
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.apps.patients.domain.enums import (
     PatientAddressesEnum,
     PatientContactTypeEnum,
     PatientRelativesKinshipEnum,
 )
+from src.core.i18n import _
 from src.shared.helpers.validation_helpers import (
     validate_date_of_birth,
     validate_field_not_blank,
@@ -59,3 +60,24 @@ class PatientContactInfoItemSchema(BaseModel):
     @field_validator("value", mode="before")
     def validate_value_field(cls, v):
         return validate_field_not_blank(v, "value")
+
+
+class PatientAttachmentDataItemSchema(BaseModel):
+    area_number: Optional[int] = Field(
+        None, description="Area number (In Russian: Номер участка прикрепления)"
+    )
+    attached_clinic_id: Optional[int] = Field(
+        None, description="Clinic ID patient attached to"
+    )
+
+    # Since attachment data was provided as NOT NONE -> at least one of the inner fields must be provided too
+    @model_validator(mode="after")
+    def check_at_least_one_field(cls, model):
+        if model.area_number is None and model.attached_clinic_id is None:
+            raise ValueError(
+                _(
+                    "At least one of 'area_number' or 'attached_clinic_id' must be provided"
+                )
+            )
+
+        return model

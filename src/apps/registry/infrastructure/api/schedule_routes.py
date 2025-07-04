@@ -5,7 +5,7 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends
 
 from src.apps.registry.container import RegistryContainer
-from src.apps.registry.infrastructure.api.schemas.requests.schedule_filter_params import (
+from src.apps.registry.infrastructure.api.schemas.requests.filters.schedule_filter_params import (
     ScheduleFilterParams,
 )
 from src.apps.registry.infrastructure.api.schemas.requests.schedule_schemas import (
@@ -17,7 +17,6 @@ from src.apps.registry.infrastructure.api.schemas.responses.schedule_schemas imp
     ResponseScheduleSchema,
 )
 from src.apps.registry.services.schedule_service import ScheduleService
-from src.apps.users.infrastructure.schemas.user_schemas import UserSchema
 from src.apps.users.mappers import map_user_domain_to_schema
 from src.shared.schemas.pagination_schemas import (
     PaginationMetaDataSchema,
@@ -91,22 +90,7 @@ async def get_schedules(
         items=[
             ResponseScheduleSchema(
                 id=schedule.id,
-                doctor=UserSchema(
-                    id=doctor.id,
-                    first_name=doctor.first_name,
-                    last_name=doctor.last_name,
-                    middle_name=doctor.middle_name,
-                    iin=doctor.iin,
-                    date_of_birth=doctor.date_of_birth,
-                    client_roles=doctor.client_roles,
-                    enabled=doctor.enabled,
-                    served_patient_types=doctor.served_patient_types,
-                    served_referral_types=doctor.served_referral_types,
-                    served_referral_origins=doctor.served_referral_origins,
-                    served_payment_types=doctor.served_payment_types,
-                    attachment_data=doctor.attachment_data,
-                    specializations=doctor.specializations,
-                ),
+                doctor=map_user_domain_to_schema(doctor),
                 schedule_name=schedule.schedule_name,
                 period_start=schedule.period_start,
                 period_end=schedule.period_end,

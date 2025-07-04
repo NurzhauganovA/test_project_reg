@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from sqlalchemy import Date
 from sqlalchemy import Enum as SAEnum
@@ -21,6 +21,7 @@ from src.apps.patients.infrastructure.db_models.association_tables import (
     patient_additional_attribute,
     patient_financing_source,
 )
+from src.apps.registry.infrastructure.db_models.models import Appointment
 from src.shared.infrastructure.base import (
     Base,
     ChangedAtMixin,
@@ -81,8 +82,10 @@ class SQLAlchemyPatient(Base, PrimaryKey, ChangedAtMixin, CreatedAtMixin):
         server_default=PatientMaritalStatusEnum.NOT_SPECIFIED.value,
         comment="Patient's marital_status. The optional field. Default is 'NOT_SPECIFIED'.",
     )
-    attached_clinic_id: Mapped[int] = mapped_column(
-        ForeignKey("cat_medical_organizations.id"), nullable=False
+    attachment_data: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Patient's attachment data. The optional field.",
     )
     relatives: Mapped[List[Dict]] = mapped_column(
         JSONB,
@@ -144,9 +147,6 @@ class SQLAlchemyPatient(Base, PrimaryKey, ChangedAtMixin, CreatedAtMixin):
     # --- Relationships ---
     citizenship = relationship("SQLAlchemyCitizenshipCatalogue", lazy="joined")
     nationality = relationship("SQLAlchemyNationalitiesCatalogue", lazy="joined")
-    attached_clinic = relationship(
-        "SQLAlchemyMedicalOrganizationsCatalogue", lazy="joined"
-    )
 
     financing_sources: Mapped[List["SQLAlchemyFinancingSourcesCatalog"]] = relationship(
         "SQLAlchemyFinancingSourcesCatalog",
@@ -161,4 +161,17 @@ class SQLAlchemyPatient(Base, PrimaryKey, ChangedAtMixin, CreatedAtMixin):
         secondary=patient_additional_attribute,
         lazy="selectin",
         backref="patients",
+    )
+    insurances: Mapped[List["SQLAlchemyInsuranceInfoCatalogue"]] = (  # noqa: F821
+        relationship(
+            "SQLAlchemyInsuranceInfoCatalogue",
+            back_populates="patient",
+            cascade="all, delete-orphan",
+            lazy="selectin",
+        )
+    )
+    appointments: Mapped[List["Appointment"]] = relationship(
+        "Appointment",
+        back_populates="patient",
+        lazy="selectin",
     )

@@ -213,8 +213,8 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
             query = query.where(StationaryAsset.delivery_status == filters["delivery_status"])
 
         # Участок и специализация
-        if filters.get("area_number") is not None:
-            query = query.where(StationaryAsset.area_number == filters["area_number"])
+        if filters.get("area") is not None:
+            query = query.where(StationaryAsset.area == filters["area"])
 
         if filters.get("specialization"):
             query = query.where(

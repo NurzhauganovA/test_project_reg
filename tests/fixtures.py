@@ -8,10 +8,15 @@ from httpx import AsyncClient
 import pytest
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
+from src.apps.catalogs.infrastructure.api.schemas.requests.insurance_info_catalog_request_schemas import \
+    AddInsuranceInfoRecordSchema
 from src.apps.catalogs.infrastructure.repositories.citizenship_catalog_repository import \
     SQLAlchemyCitizenshipCatalogueRepositoryImpl
+from src.apps.catalogs.infrastructure.repositories.insurance_info_catalog_repository import \
+    SQLAlchemyInsuranceInfoCatalogRepositoryImpl
 from src.apps.catalogs.infrastructure.repositories.nationalities_catalog_repository import \
     SQLAlchemyNationalitiesCatalogRepositoryImpl
+from src.apps.catalogs.services.insurance_info_catalog_service import InsuranceInfoCatalogService
 from src.apps.catalogs.services.nationalities_catalog_service import NationalitiesCatalogService
 from src.apps.patients.infrastructure.repositories.patient_repository import SQLAlchemyPatientRepository
 from src.apps.patients.services.patients_service import PatientService
@@ -23,7 +28,7 @@ from src.apps.catalogs.infrastructure.api.schemas.responses.financing_sources_ca
     FinancingSourceFullResponseSchema
 )
 from src.apps.catalogs.infrastructure.db_models.models import SQLAlchemyFinancingSourcesCatalog, \
-    SQLAlchemyNationalitiesCatalogue
+    SQLAlchemyNationalitiesCatalogue, SQLAlchemyInsuranceInfoCatalogue
 from src.apps.catalogs.infrastructure.repositories.financing_sources_repository import (
     SQLAlchemyFinancingSourcesCatalogRepositoryImpl
 )
@@ -769,4 +774,97 @@ def patient_service(mock_uow, mock_patient_repository, mock_catalog_services):
         medical_org_service=medical_org_service,
         financing_source_service=financing_source_service,
         patient_context_attributes_service=patient_context_attributes_service,
+    )
+
+
+@pytest.fixture
+def mock_insurance_info_catalog_repository():
+    repository = MagicMock(spec=SQLAlchemyInsuranceInfoCatalogRepositoryImpl)
+
+    repository.get_total_number_of_insurance_info_records = AsyncMock()
+    repository.get_by_id = AsyncMock()
+    repository.get_insurance_info_records = AsyncMock()
+    repository.add_insurance_info_record = AsyncMock()
+    repository.update_insurance_info_record = AsyncMock()
+    repository.delete_by_id = AsyncMock()
+
+    return repository
+
+
+@pytest.fixture
+def mock_patients_service():
+    service = MagicMock(spec=PatientService)
+    service.get_by_id = AsyncMock()
+
+    return service
+
+
+@pytest.fixture
+def mock_financing_sources_catalog_service():
+    service = MagicMock(spec=FinancingSourceCatalogService)
+    service.get_by_id = AsyncMock()
+
+    return service
+
+
+@pytest.fixture
+def insurance_info_service(
+        dummy_logger,
+        mock_insurance_info_catalog_repository,
+        mock_patients_service,
+        mock_financing_sources_catalog_service,
+):
+    return InsuranceInfoCatalogService(
+        logger=dummy_logger,
+        insurance_info_catalog_repository=mock_insurance_info_catalog_repository,
+        patients_service=mock_patients_service,
+        financing_sources_catalog_service=mock_financing_sources_catalog_service
+    )
+
+
+@pytest.fixture
+def insurance_info_catalog_repository_impl(dummy_logger, mock_async_db_session):
+    return SQLAlchemyInsuranceInfoCatalogRepositoryImpl(
+        logger=dummy_logger,
+        async_db_session=mock_async_db_session
+    )
+
+
+@pytest.fixture
+def mock_add_insurance_info_catalog_schema():
+    return AddInsuranceInfoRecordSchema(
+        policy_number="DUMMY_POLICY_NUMBER_001",
+        company="Dummy Company Limited",
+        valid_from=datetime.date(2025, 6, 5),
+        valid_till=datetime.date(2026, 6, 5),
+        comment="One-year insurance plan",
+        patient_id=uuid.uuid4(),
+        financing_source_id=1
+    )
+
+
+@pytest.fixture
+def mock_update_insurance_info_catalog_schema():
+    return AddInsuranceInfoRecordSchema(
+        policy_number="UPDATED_DUMMY_POLICY_NUMBER_001",
+        company="Updated Dummy Company Limited",
+        valid_from=datetime.date(2025, 6, 5),
+        valid_till=None,
+        comment=None,
+        patient_id=uuid.uuid4(),
+        financing_source_id=1
+    )
+
+
+@pytest.fixture
+def mock_insurance_info_db_entity():
+    return SQLAlchemyInsuranceInfoCatalogue(
+        id=1,
+        policy_number="DUMMY_POLICY_NUMBER_001",
+        company="Dummy Company Limited",
+        valid_from=datetime.date(2025, 6, 5),
+        valid_till=datetime.date(2026, 6, 5),
+        comment="One-year insurance plan",
+        patient_id=uuid.uuid4(),
+        financing_source_id=1
     )

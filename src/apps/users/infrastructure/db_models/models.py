@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Union
 from sqlalchemy import Boolean, Date, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.expression import text
 
 from src.shared.infrastructure.base import (
     Base,
@@ -22,6 +23,7 @@ class User(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     middle_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    full_name = mapped_column(String(256), nullable=True)
     iin: Mapped[str] = mapped_column(String(12), unique=True, nullable=False)
     date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
     client_roles: Mapped[List[str]] = mapped_column(
@@ -70,10 +72,4 @@ class User(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
         back_populates="doctor",
         cascade="all, delete-orphan",
         foreign_keys="Schedule.doctor_id",
-    )
-    appointments: Mapped[List["Appointment"]] = relationship(
-        "Appointment",
-        back_populates="patient",
-        cascade="all, delete-orphan",
-        foreign_keys="Appointment.patient_id",
     )

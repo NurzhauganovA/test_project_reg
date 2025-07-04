@@ -22,7 +22,9 @@ from src.shared.base_uow import BaseUnitOfWork
 class UnitOfWorkImpl(BaseUnitOfWork):
     @property
     def patients_repository(self) -> SQLAlchemyPatientRepository:
-        return SQLAlchemyPatientRepository(async_db_session=self._session)
+        return SQLAlchemyPatientRepository(
+            async_db_session=self._session, logger=self._logger
+        )
 
     # ONE-to-ONE relations with patients
     @property

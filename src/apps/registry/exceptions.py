@@ -29,6 +29,10 @@ class ScheduleDayNotFoundError(ApplicationRegistryAppError):
     pass
 
 
+class ScheduleDayIsNotActiveError(ApplicationRegistryAppError):
+    pass
+
+
 class ScheduleIsNotActiveError(ApplicationRegistryAppError):
     pass
 

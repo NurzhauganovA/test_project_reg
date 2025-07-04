@@ -9,6 +9,9 @@ from src.apps.catalogs.infrastructure.repositories.citizenship_catalog_repositor
 from src.apps.catalogs.infrastructure.repositories.financing_sources_repository import (
     SQLAlchemyFinancingSourcesCatalogRepositoryImpl,
 )
+from src.apps.catalogs.infrastructure.repositories.insurance_info_catalog_repository import (
+    SQLAlchemyInsuranceInfoCatalogRepositoryImpl,
+)
 from src.apps.catalogs.infrastructure.repositories.medical_organizations_catalog_repository import (
     SQLAlchemyMedicalOrganizationsCatalogCatalogueRepositoryImpl,
 )
@@ -23,6 +26,9 @@ from src.apps.catalogs.services.citizenship_catalog_service import (
 )
 from src.apps.catalogs.services.financing_sources_catalog_service import (
     FinancingSourceCatalogService,
+)
+from src.apps.catalogs.services.insurance_info_catalog_service import (
+    InsuranceInfoCatalogService,
 )
 from src.apps.catalogs.services.medical_organizations_catalog_service import (
     MedicalOrganizationsCatalogService,
@@ -46,6 +52,7 @@ class CatalogsContainer(containers.DeclarativeContainer):
     # Dependencies from core DI-container
     logger = providers.Dependency(instance_of=LoggerService)
     engine = providers.Dependency(instance_of=AsyncEngine)
+    patients_service = providers.Dependency()
 
     # Session factory
     session_factory = providers.Singleton(
@@ -88,6 +95,12 @@ class CatalogsContainer(containers.DeclarativeContainer):
         logger=logger,
     )
 
+    insurance_info_catalog_repository = providers.Factory(
+        SQLAlchemyInsuranceInfoCatalogRepositoryImpl,
+        async_db_session=async_db_session,
+        logger=logger,
+    )
+
     # Services
     nationalities_catalog_service = providers.Factory(
         NationalitiesCatalogService,
@@ -117,4 +130,12 @@ class CatalogsContainer(containers.DeclarativeContainer):
         CitizenshipCatalogService,
         logger=logger,
         citizenship_catalog_repository=citizenship_catalog_repository,
+    )
+
+    insurance_info_catalog_service = providers.Factory(
+        InsuranceInfoCatalogService,
+        logger=logger,
+        insurance_info_catalog_repository=insurance_info_catalog_repository,
+        patients_service=patients_service,
+        financing_sources_catalog_service=financing_sources_catalog_service,
     )

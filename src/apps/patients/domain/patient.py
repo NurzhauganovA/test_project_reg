@@ -1,67 +1,13 @@
 from datetime import date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from src.apps.patients.domain.enums import (
-    PatientAddressesEnum,
-    PatientContactTypeEnum,
     PatientGenderEnum,
     PatientMaritalStatusEnum,
     PatientProfileStatusEnum,
-    PatientRelativesKinshipEnum,
     PatientSocialStatusEnum,
 )
-
-
-class PatientRelativeDomain:
-    type: PatientRelativesKinshipEnum
-    full_name: str
-    iin: Optional[str]
-    birth_date: Optional[date]
-    phone: Optional[str]
-    relation_comment: Optional[str]
-
-    def __init__(
-        self,
-        type: PatientRelativesKinshipEnum,
-        full_name: str,
-        iin: Optional[str] = None,
-        birth_date: Optional[date] = None,
-        phone: Optional[str] = None,
-        relation_comment: Optional[str] = None,
-    ) -> None:
-        self.type = type
-        self.full_name = full_name
-        self.iin = iin
-        self.birth_date = birth_date
-        self.phone = phone
-        self.relation_comment = relation_comment
-
-
-class PatientAddressDomain:
-    type: PatientAddressesEnum
-    value: str
-    is_primary: bool
-
-    def __init__(
-        self, type: PatientAddressesEnum, value: str, is_primary: bool
-    ) -> None:
-        self.type = type
-        self.value = value
-        self.is_primary = is_primary
-
-
-class PatientContactInfoDomain:
-    type: PatientContactTypeEnum
-    value: str
-    is_primary: bool
-
-    def __init__(
-        self, type: PatientContactTypeEnum, value: str, is_primary: bool
-    ) -> None:
-        self.type = type
-        self.value = value
-        self.is_primary = is_primary
 
 
 class PatientDomain:
@@ -82,10 +28,10 @@ class PatientDomain:
         context_attributes_ids: Optional[List[int]] = None,
         social_status: Optional[PatientSocialStatusEnum] = None,
         marital_status: Optional[PatientMaritalStatusEnum] = None,
-        attached_clinic_id: int,
-        relatives: Optional[List[PatientRelativeDomain]],
-        addresses: Optional[List[PatientAddressDomain]],
-        contact_info: Optional[List[PatientContactInfoDomain]],
+        attachment_data: Optional[Dict[str, Any]] = None,
+        relatives: Optional[List[Dict[str, Any]]],
+        addresses: Optional[List[Dict[str, Any]]],
+        contact_info: Optional[List[Dict[str, Any]]],
         profile_status: Optional[PatientProfileStatusEnum] = None,
     ) -> None:
         self.id = id
@@ -102,7 +48,7 @@ class PatientDomain:
         self.context_attributes_ids = context_attributes_ids or []
         self.social_status = social_status
         self.marital_status = marital_status
-        self.attached_clinic_id = attached_clinic_id
+        self.attachment_data = attachment_data
         self.relatives = relatives or []
         self.addresses = addresses or []
         self.contact_info = contact_info or []

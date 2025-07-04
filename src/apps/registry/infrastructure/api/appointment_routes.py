@@ -1,20 +1,27 @@
 import math
-from datetime import date
-from typing import List
+from typing import Annotated, List
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
+from src.apps.patients.infrastructure.api.schemas.responses.patient_response_schemas import (
+    ResponsePatientSchema,
+)
+from src.apps.patients.mappers import map_patient_domain_to_response_schema
 from src.apps.registry.container import RegistryContainer
 from src.apps.registry.infrastructure.api.schemas.requests.appointment_schemas import (
     CreateAppointmentSchema,
     UpdateAppointmentSchema,
 )
+from src.apps.registry.infrastructure.api.schemas.requests.filters.appointment_filter_params import (
+    AppointmentFilterParams,
+)
 from src.apps.registry.infrastructure.api.schemas.responses.appointment_schemas import (
     MultipleAppointmentsResponseSchema,
     ResponseAppointmentSchema,
 )
+from src.apps.registry.mappers import map_appointment_domain_to_response_schema
 from src.apps.registry.services.appointment_service import AppointmentService
 from src.apps.users.infrastructure.schemas.user_schemas import UserSchema
 from src.apps.users.mappers import map_user_domain_to_schema
@@ -41,49 +48,38 @@ async def get_by_id(
     appointment, patient, doctor, end_time, appointment_date = (
         await appointment_service.get_by_id(appointment_id=appointment_id)
     )
-    patient_response_schema = map_user_domain_to_schema(patient) if patient else None
+    patient_response_schema = (
+        map_patient_domain_to_response_schema(patient) if patient else None
+    )
     doctor_response_schema = map_user_domain_to_schema(doctor)
     appointment_date = appointment_date
 
-    appointment_response_schema = ResponseAppointmentSchema(
-        id=appointment.id,
-        schedule_day_id=appointment.schedule_day_id,
-        start_time=appointment.time,
-        end_time=end_time,
-        date=appointment_date,
-        patient=patient_response_schema,
-        doctor=doctor_response_schema,
-        status=appointment.status,
-        type=appointment.type,
-        insurance_type=appointment.insurance_type,
-        reason=appointment.reason,
-        additional_services=appointment.additional_services,
+    response_schema = map_appointment_domain_to_response_schema(
+        appointment=appointment,
+        appointment_end_time=end_time,
+        appointment_date=appointment_date,
+        patient_schema=patient_response_schema,
+        doctor_schema=doctor_response_schema,
     )
 
-    return appointment_response_schema
+    return response_schema
 
 
 @appointments_router.get(
-    "/{schedule_id}/appointments",
+    "/appointments",
     response_model=MultipleAppointmentsResponseSchema,
 )
 @inject
-async def get_appointments_by_schedule_and_period(
-    schedule_id: UUID,
-    period_start: date = Query(..., description="Date in format YYYY-MM-DD"),
-    period_end: date = Query(..., description="Date in format YYYY-MM-DD"),
+async def get_appointments(
+    filter_params: Annotated[AppointmentFilterParams, Depends()],
     appointment_service: AppointmentService = Depends(
         Provide[RegistryContainer.appointment_service]
     ),
     pagination_params: PaginationParams = Depends(),
 ) -> MultipleAppointmentsResponseSchema:
-    results, total_appointments_amount = (
-        await appointment_service.get_appointments_by_schedule_and_period(
-            schedule_id=schedule_id,
-            period_start=period_start,
-            period_end=period_end,
-            pagination_params=pagination_params,
-        )
+    results, total_appointments_amount = await appointment_service.get_appointments(
+        filter_params=filter_params,
+        pagination_params=pagination_params,
     )
 
     # Calculate pagination metadata
@@ -104,25 +100,18 @@ async def get_appointments_by_schedule_and_period(
 
     response_schemas: List[ResponseAppointmentSchema] = []
     for appointment, patient, doctor, end_time, appointment_date in results:
-        patient_schema: UserSchema = (
-            map_user_domain_to_schema(patient) if patient else None
+        patient_schema: ResponsePatientSchema | None = (
+            map_patient_domain_to_response_schema(patient) if patient else None
         )
         doctor_schema: UserSchema = map_user_domain_to_schema(doctor)
 
         response_schemas.append(
-            ResponseAppointmentSchema(
-                id=appointment.id,
-                schedule_day_id=appointment.schedule_day_id,
-                start_time=appointment.time,
-                end_time=end_time,
-                date=appointment_date,
-                patient=patient_schema,
-                doctor=doctor_schema,
-                status=appointment.status,
-                type=appointment.type,
-                insurance_type=appointment.insurance_type,
-                reason=appointment.reason,
-                additional_services=appointment.additional_services,
+            map_appointment_domain_to_response_schema(
+                appointment=appointment,
+                appointment_end_time=end_time,
+                appointment_date=appointment_date,
+                patient_schema=patient_schema,
+                doctor_schema=doctor_schema,
             )
         )
 
@@ -152,23 +141,20 @@ async def update_appointment(
         )
     )
 
-    patient_schema: UserSchema = map_user_domain_to_schema(patient) if patient else None
+    patient_schema: ResponsePatientSchema | None = (
+        map_patient_domain_to_response_schema(patient) if patient else None
+    )
     doctor_schema: UserSchema = map_user_domain_to_schema(doctor)
 
-    return ResponseAppointmentSchema(
-        id=appointment.id,
-        schedule_day_id=appointment.schedule_day_id,
-        start_time=appointment.time,
-        end_time=end_time,
-        date=appointment_date,
-        patient=patient_schema,
-        doctor=doctor_schema,
-        status=appointment.status,
-        type=appointment.type,
-        insurance_type=appointment.insurance_type,
-        reason=appointment.reason,
-        additional_services=appointment.additional_services,
+    response_schema = map_appointment_domain_to_response_schema(
+        appointment=appointment,
+        appointment_end_time=end_time,
+        appointment_date=appointment_date,
+        patient_schema=patient_schema,
+        doctor_schema=doctor_schema,
     )
+
+    return response_schema
 
 
 @appointments_router.post(
@@ -190,23 +176,20 @@ async def create_appointment(
         )
     )
 
-    patient_schema: UserSchema = map_user_domain_to_schema(patient) if patient else None
+    patient_schema: ResponsePatientSchema | None = (
+        map_patient_domain_to_response_schema(patient) if patient else None
+    )
     doctor_schema: UserSchema = map_user_domain_to_schema(doctor)
 
-    return ResponseAppointmentSchema(
-        id=appointment.id,
-        schedule_day_id=appointment.schedule_day_id,
-        start_time=appointment.time,
-        end_time=end_time,
-        date=appointment_date,
-        patient=patient_schema,
-        doctor=doctor_schema,
-        status=appointment.status,
-        type=appointment.type,
-        insurance_type=appointment.insurance_type,
-        reason=appointment.reason,
-        additional_services=appointment.additional_services,
+    response_schema = map_appointment_domain_to_response_schema(
+        appointment=appointment,
+        appointment_end_time=end_time,
+        appointment_date=appointment_date,
+        patient_schema=patient_schema,
+        doctor_schema=doctor_schema,
     )
+
+    return response_schema
 
 
 @appointments_router.delete("/appointments/{appointment_id}", status_code=204)

@@ -2,7 +2,12 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from src.apps.patients.domain.patient import PatientDomain
+from src.apps.patients.services.patients_service import PatientService
 from src.apps.registry.domain.enums import AppointmentStatusEnum
+from src.apps.registry.domain.exceptions import (
+    ScheduleDayIsNotActiveError as ScheduleDayIsNotActiveErrorDomain,
+)
 from src.apps.registry.domain.models.appointment import AppointmentDomain
 from src.apps.registry.domain.models.schedule import ScheduleDomain
 from src.apps.registry.exceptions import (
@@ -10,12 +15,16 @@ from src.apps.registry.exceptions import (
     InvalidAppointmentInsuranceTypeError,
     InvalidAppointmentTimeError,
     NoInstanceFoundError,
+    ScheduleDayIsNotActiveError,
     ScheduleDayNotFoundError,
     ScheduleIsNotActiveError,
 )
 from src.apps.registry.infrastructure.api.schemas.requests.appointment_schemas import (
     CreateAppointmentSchema,
     UpdateAppointmentSchema,
+)
+from src.apps.registry.infrastructure.api.schemas.requests.filters.appointment_filter_params import (
+    AppointmentFilterParams,
 )
 from src.apps.registry.infrastructure.api.schemas.responses.schedule_day_schemas import (
     ResponseScheduleDaySchema,
@@ -44,6 +53,7 @@ class AppointmentService:
         schedule_repository: ScheduleRepositoryInterface,
         schedule_day_repository: ScheduleDayRepositoryInterface,
         user_service: UserService,
+        patients_service: PatientService,
         user_repository: UserRepositoryInterface,
     ):
         self._uow = uow
@@ -52,21 +62,16 @@ class AppointmentService:
         self._schedule_repository = schedule_repository
         self._schedule_day_repository = schedule_day_repository
         self._user_service = user_service
+        self._patients_service = patients_service
         self._user_repository = user_repository
 
     @staticmethod
     def __subtract_interval(base_date: date, base_time: time, minutes: int) -> datetime:
-        """
-        Subtracts a minute interval from combined date and time and returns datetime.
-        """
         base_datetime = datetime.combine(base_date, base_time)
         return base_datetime - timedelta(minutes=minutes)
 
     @staticmethod
     def __add_interval(base_date: date, base_time: time, minutes: int) -> datetime:
-        """
-        Adds a minute interval to combined date and time and returns datetime.
-        """
         base_datetime = datetime.combine(base_date, base_time)
         return base_datetime + timedelta(minutes=minutes)
 
@@ -78,17 +83,6 @@ class AppointmentService:
         appointment_interval_minutes: int,
         requested_start_time: time,
     ) -> None:
-        """
-        Checks that the appointment time falls within the schedule's working hours and does not exceed them.
-
-        :param appointment_start_datetime: appointment start datetime (within a fictitious date)
-        :param appointment_end_datetime: appointment end datetime
-        :param schedule_day: ScheduleDay object with working hours
-        :param appointment_interval_minutes: appointment duration in minutes
-        :param requested_start_time: appointment start time (time), for error message
-
-        :raises InvalidAppointmentTimeError: if time is outside working hours
-        """
         working_day_start_datetime = datetime.combine(
             schedule_day.date, schedule_day.work_start_time
         )
@@ -122,47 +116,17 @@ class AppointmentService:
         *,
         status_code: int = 409,
     ):
-        """
-        Generic validation of doctor profile by dictionary settings.
-
-        :param doctor_dict: dict, such as doctor.served_payment_types, doctor.patient_type, etc.
-        :param key: value to validate (string or Enum.value)
-        :param exc_class: exception class (e.g., InvalidAppointmentInsuranceTypeError)
-        :param detail: detail for exception
-        :param status_code: HTTP status code (default 409)
-        """
         if not doctor_dict or not doctor_dict.get(key, False):
             raise exc_class(status_code=status_code, detail=detail)
 
     @staticmethod
     def _extract_key(obj: Any) -> str:
-        """
-        Extracts the string value of a key from an object.
-        If the object has a 'value' attribute (e.g., Enum), returns it,
-        otherwise casts the object to a string.
-
-        :param obj: The object to get the key from (Enum or str)
-        :return: The string representation of the key
-        """
         return getattr(obj, "value", str(obj))
 
     @staticmethod
     def _check_support(
         obj: Any, doctor: UserDomain, attribute_name: str, error_message: str
     ):
-        """
-        Checks that the doctor's attribute_name contains a key extracted from the obj object.
-        If the key is missing, raises an exception
-        InvalidAppointmentInsuranceTypeError with the specified message.
-
-        :param obj: Object with the key (Enum or str)
-        :param doctor: UserDomain object with the doctor's profile
-        :param attribute_name: Name of the doctor's attribute containing the supported types
-        (e.g. 'served_patient_types')
-        :param error_message: Error text if support is missing
-
-        :raises InvalidAppointmentInsuranceTypeError: if support is missing
-        """
         key = AppointmentService._extract_key(obj)
         served = getattr(doctor, attribute_name, [])
         if key not in served:
@@ -180,18 +144,6 @@ class AppointmentService:
         appointment_interval_minutes: int,
         current_appointment_id: Optional[int] = None,
     ) -> None:
-        """
-        Checks that the new appointment time does not overlap with existing ones.
-
-        :param appointment_start_datetime: new appointment start time
-        :param appointment_end_datetime: new appointment end time
-        :param existing_appointments: list of already scheduled appointments
-        :param schedule_day_date: schedule date
-        :param appointment_interval_minutes: appointment duration in minutes
-        :param current_appointment_id: current appointment id (if updating) to ignore
-
-        :raises AppointmentOverlappingError: if overlap is detected
-        """
         for existing_appointment in existing_appointments:
             if (
                 current_appointment_id is not None
@@ -220,67 +172,132 @@ class AppointmentService:
     @staticmethod
     def _check_appointment_exists(
         appointment: Optional[AppointmentDomain], appointment_id: int
-    ) -> None:
+    ) -> AppointmentDomain:
         if not appointment:
             raise NoInstanceFoundError(
                 status_code=404,
                 detail=_("Appointment with ID: %(ID)s not found.")
                 % {"ID": appointment_id},
             )
+        return appointment
 
     @staticmethod
     def _check_schedule_exists(
         schedule: Optional[ScheduleDomain], schedule_id: UUID
-    ) -> None:
+    ) -> ScheduleDomain:
         if not schedule:
             raise ScheduleDayNotFoundError(
                 status_code=404,
                 detail=_("Schedule for day ID %(ID)s not found.") % {"ID": schedule_id},
             )
+        return schedule
 
     @staticmethod
     def _check_schedule_day_exists(
         schedule_day: Optional[ResponseScheduleDaySchema], schedule_day_id: UUID
-    ) -> None:
+    ) -> ResponseScheduleDaySchema:
         if not schedule_day:
             raise ScheduleDayNotFoundError(
                 status_code=404,
                 detail=_("Schedule day with ID %(ID)s not found.")
                 % {"ID": schedule_day_id},
             )
+        return schedule_day
+
+    @staticmethod
+    async def _load_entities_by_ids(ids: set, load_function):
+        results = []
+        for entity_id in ids:
+            entity = await load_function(entity_id)
+            if entity is not None:
+                results.append(entity)
+        return {entity.id: entity for entity in results}
+
+    @staticmethod
+    def _appointment_passes_filters(
+        patient: Optional[PatientDomain],
+        schedule_day,
+        schedule,
+        doctors_map: dict[int, UserDomain],
+        filter_params: AppointmentFilterParams,
+    ) -> bool:
+        if filter_params.patient_iin_filter:
+            if not patient or patient.iin != filter_params.patient_iin_filter:
+                return False
+
+        if schedule_day is None or schedule is None:
+            return False
+
+        if (
+            filter_params.doctor_id_filter
+            and schedule.doctor_id != filter_params.doctor_id_filter
+        ):
+            return False
+
+        if filter_params.patient_full_name_filter:
+            if not patient:
+                return False
+
+            full_name = (
+                f"{patient.last_name} {patient.first_name} {patient.middle_name or ''}"
+                f" {patient.maiden_name or ''}"
+            ).lower()
+            if filter_params.patient_full_name_filter.lower() not in full_name:
+                return False
+
+        if filter_params.doctor_specialization_filter:
+            doctor = doctors_map.get(schedule.doctor_id)
+            if not doctor:
+                return False
+
+            specialization_filter = (
+                filter_params.doctor_specialization_filter.strip().lower()
+            )
+            if not any(
+                specialization.get("name", "").strip().lower() == specialization_filter
+                for specialization in (doctor.specializations or [])
+            ):
+                return False
+
+        if filter_params.attached_area_number_filter:
+            if not patient or not patient.attachment_data:
+                return False
+
+            area_number = patient.attachment_data.get("area_number")
+            if area_number != filter_params.attached_area_number_filter:
+                return False
+
+        return True
 
     async def get_by_id(
         self, appointment_id: int
-    ) -> Tuple[AppointmentDomain, Optional[UserDomain], UserDomain, time, date]:
-        """
-        Retrieves an appointment by its ID.
-
-        :return: List of AppointmentDomain, UserDomain objects and time of the appointment end.
-        """
-        appointment = await self._appointment_repository.get_by_id(appointment_id)
-        self._check_appointment_exists(appointment, appointment_id)
-
-        schedule = await self._schedule_repository.get_schedule_by_day_id(
-            appointment.schedule_day_id
+    ) -> Tuple[AppointmentDomain, Optional[PatientDomain], UserDomain, time, date]:
+        appointment = self._check_appointment_exists(
+            await self._appointment_repository.get_by_id(appointment_id),
+            appointment_id,
         )
-        self._check_schedule_exists(schedule, appointment.schedule_day_id)
 
-        schedule_day = await self._schedule_day_repository.get_by_id(
-            appointment.schedule_day_id
+        schedule = self._check_schedule_exists(
+            await self._schedule_repository.get_schedule_by_day_id(
+                appointment.schedule_day_id
+            ),
+            appointment.schedule_day_id,
         )
-        self._check_schedule_day_exists(schedule_day, appointment.schedule_day_id)
 
-        # Get a doctor and patient
+        schedule_day = self._check_schedule_day_exists(
+            await self._schedule_day_repository.get_by_id(appointment.schedule_day_id),
+            appointment.schedule_day_id,
+        )
+
         doctor: UserDomain = await self._user_service.get_by_id(schedule.doctor_id)
         patient = (
-            await self._user_service.get_by_id(appointment.patient_id)
+            await self._patients_service.get_by_id(appointment.patient_id)
             if appointment.patient_id
             else None
         )
 
         appointment_date: date = schedule_day.date
 
-        # Calculate the appointment end time
         appointment_end_datetime = self.__add_interval(
             appointment_date, appointment.time, schedule.appointment_interval
         )
@@ -288,110 +305,104 @@ class AppointmentService:
 
         return appointment, patient, doctor, appointment_end_time, appointment_date
 
-    async def get_appointments_by_schedule_and_period(
+    async def get_appointments(
         self,
-        schedule_id: UUID,
-        period_start: date,
-        period_end: date,
+        filter_params: AppointmentFilterParams,
         pagination_params: PaginationParams,
     ) -> Tuple[
-        List[Tuple[AppointmentDomain, Optional[UserDomain], UserDomain, time, date]],
+        List[Tuple[AppointmentDomain, Optional[PatientDomain], UserDomain, time, date]],
         int,
     ]:
-        """
-        Gets a list of appointments for the given schedule (schedule_id),
-        whose appointment date falls within the range [period_start, period_end].
-
-        :param pagination_params: Pagination parameters (limit, page).
-        :param schedule_id: Schedule UUID.
-        :param period_start: Start date of the period.
-        :param period_end: End date of the period.
-        :return: Tuple with -> [list of tuples with AppointmentDomain,
-        UserDomain objects and appointment end time for each appointment, int].
-        """
-        # Check if the schedule exists
-        existing_schedule = await self._schedule_repository.get_by_id(
-            id=schedule_id,
-        )
-        if not existing_schedule:
-            raise NoInstanceFoundError(
-                status_code=404,
-                detail=_("Schedule with ID: %(ID)s not found.") % {"ID": schedule_id},
-            )
-
-        # Get appointments
-        appointments = await self._appointment_repository.get_by_schedule_id_and_period(
-            schedule_id=schedule_id,
-            period_start=period_start,
-            period_end=period_end,
-            page=pagination_params.page,
+        filters_dict = filter_params.to_dict(exclude_none=True)
+        appointments = await self._appointment_repository.get_appointments(
+            filters=filters_dict,
             limit=pagination_params.limit,
+            page=pagination_params.page,
         )
 
-        # Count the total number of records in the DB
-        total_amount_of_records: int = (
+        total_amount_of_records = (
             await self._appointment_repository.get_total_number_of_appointments()
         )
 
         if not appointments:
             return [], total_amount_of_records
 
-        doctor = await self._user_service.get_by_id(existing_schedule.doctor_id)
+        patient_ids = {
+            appointment.patient_id
+            for appointment in appointments
+            if appointment.patient_id
+        }
+        schedule_day_ids = {appointment.schedule_day_id for appointment in appointments}
 
-        results: List[
-            Tuple[AppointmentDomain, Optional[UserDomain], UserDomain, time, date]
-        ] = []
+        patients_map = await self._load_entities_by_ids(
+            patient_ids, self._patients_service.get_by_id
+        )
+        schedule_days_map = await self._load_entities_by_ids(
+            schedule_day_ids, self._schedule_day_repository.get_by_id
+        )
+
+        schedule_ids = {
+            schedule_day.schedule_id for schedule_day in schedule_days_map.values()
+        }
+        schedules_map = await self._load_entities_by_ids(
+            schedule_ids, self._schedule_repository.get_by_id
+        )
+
+        doctor_ids = {
+            schedule.doctor_id
+            for schedule in schedules_map.values()
+            if schedule.doctor_id
+        }
+        doctors_map = await self._load_entities_by_ids(
+            doctor_ids, self._user_repository.get_by_id
+        )
+
+        filtered_results = []
         for appointment in appointments:
-            # Get appointment's patient if it's presented
-            patient: UserDomain | None = await self._user_repository.get_by_id(
-                appointment.patient_id
-            )
-            schedule = await self._schedule_repository.get_schedule_by_day_id(
-                appointment.schedule_day_id
-            )
-            self._check_schedule_exists(schedule, appointment.schedule_day_id)
+            patient = patients_map.get(appointment.patient_id)
+            schedule_day = schedule_days_map.get(appointment.schedule_day_id)
+            schedule = schedule_day and schedules_map.get(schedule_day.schedule_id)
 
-            # Get appointment's day
-            schedule_day = await self._schedule_day_repository.get_by_id(
-                appointment.schedule_day_id
-            )
-            self._check_schedule_day_exists(schedule_day, appointment.schedule_day_id)
+            if not self._appointment_passes_filters(
+                patient, schedule_day, schedule, doctors_map, filter_params
+            ):
+                continue
 
-            # Calculate the appointment end time
             end_datetime = self.__add_interval(
                 schedule_day.date, appointment.time, schedule.appointment_interval
             )
             end_time = end_datetime.time()
 
-            appointment_date = schedule_day.date
+            doctor = schedule and doctors_map.get(schedule.doctor_id)
 
-            results.append((appointment, patient, doctor, end_time, appointment_date))
+            filtered_results.append(
+                (appointment, patient, doctor, end_time, schedule_day.date)
+            )
 
-        return results, total_amount_of_records
+        return filtered_results, total_amount_of_records
 
     async def update_appointment(
         self, appointment_id: int, schema: UpdateAppointmentSchema
-    ) -> Tuple[AppointmentDomain, Optional[UserDomain], UserDomain, time, date]:
-        # Check if the appointment exists
-        appointment = await self._appointment_repository.get_by_id(appointment_id)
-        self._check_appointment_exists(appointment, appointment_id)
-
-        # Check if the patient exists if it's provided
-        if schema.patient_id:
-            await self._user_service.get_by_id(schema.patient_id)
-
-        # Get schedule day
-        schedule_day_id = schema.schedule_day_id or appointment.schedule_day_id
-        schedule_day = await self._schedule_day_repository.get_by_id(schedule_day_id)
-        self._check_schedule_day_exists(schedule_day, schedule_day_id)
-
-        # Get schedule
-        schedule = await self._schedule_repository.get_schedule_by_day_id(
-            schedule_day_id
+    ) -> Tuple[AppointmentDomain, Optional[PatientDomain], UserDomain, time, date]:
+        appointment = self._check_appointment_exists(
+            await self._appointment_repository.get_by_id(appointment_id),
+            appointment_id,
         )
-        self._check_schedule_exists(schedule, schedule_day_id)
 
-        # Get schedule's doctor
+        if schema.patient_id:
+            await self._patients_service.get_by_id(schema.patient_id)
+
+        schedule_day_id = schema.schedule_day_id or appointment.schedule_day_id
+        schedule_day = self._check_schedule_day_exists(
+            await self._schedule_day_repository.get_by_id(schedule_day_id),
+            schedule_day_id,
+        )
+
+        schedule = self._check_schedule_exists(
+            await self._schedule_repository.get_schedule_by_day_id(schedule_day_id),
+            schedule_day_id,
+        )
+
         doctor = await self._user_service.get_by_id(schedule.doctor_id)
         if not doctor:
             raise NoInstanceFoundError(
@@ -400,7 +411,6 @@ class AppointmentService:
                 % {"ID": schedule.doctor_id},
             )
 
-        # Check support of specialist
         if schema.patient_type:
             AppointmentService._check_support(
                 schema.patient_type,
@@ -430,14 +440,12 @@ class AppointmentService:
                 "The specialist does not support the provided insurance type.",
             )
 
-        # Check if day or/and time have changed
         day_changed = bool(
             schema.schedule_day_id
             and schema.schedule_day_id != appointment.schedule_day_id
         )
         time_changed = bool(schema.time and schema.time != appointment.time)
 
-        # If the day or time has changed, we check all business rules
         if day_changed or time_changed:
             if not schedule.is_active:
                 raise ScheduleIsNotActiveError(
@@ -454,7 +462,6 @@ class AppointmentService:
                 minutes=appointment_interval_minutes
             )
 
-            # Validate working hours
             self._validate_appointment_within_working_hours(
                 appointment_start_datetime,
                 appointment_end_datetime,
@@ -463,7 +470,6 @@ class AppointmentService:
                 schema.time,
             )
 
-            # Check break overlap
             if schedule_day.break_start_time and schedule_day.break_end_time:
                 break_start_datetime = datetime.combine(
                     schedule_day.date, schedule_day.break_start_time
@@ -479,7 +485,6 @@ class AppointmentService:
                         detail=_("The appointment cannot overlap with the break time."),
                     )
 
-            # Check overlapping appointments
             existing_appointments = (
                 await self._appointment_repository.get_appointments_by_day_id(
                     schedule_day_id
@@ -494,25 +499,53 @@ class AppointmentService:
                 current_appointment_id=appointment.id,
             )
 
-            # Save new fields to domain
             appointment.schedule_day_id = schedule_day_id
             appointment.time = new_appointment_time
 
-        # Apply other changes
         update_data = schema.model_dump(exclude_unset=True)
+        old_status = appointment.status
+
         for attr, val in update_data.items():
+            # These attributes should not be updated directly only through specific methods
+            if attr in ("status", "cancelled_at"):
+                continue
+
             setattr(appointment, attr, val)
 
-        # Update in DB
+        if "status" in update_data:
+            if (
+                update_data["status"] == AppointmentStatusEnum.CANCELLED
+                and old_status != AppointmentStatusEnum.CANCELLED
+            ):
+                appointment.cancel()
+
+            elif (
+                update_data["status"] == AppointmentStatusEnum.BOOKED
+                and old_status != AppointmentStatusEnum.BOOKED
+            ):
+                try:
+                    appointment.book(schedule, schedule_day)
+
+                except ScheduleIsNotActiveError as err:
+                    raise ScheduleIsNotActiveError(
+                        status_code=409,
+                        detail=_("Associated schedule is inactive or not found."),
+                    ) from err
+
+                except ScheduleDayIsNotActiveErrorDomain as err:
+                    raise ScheduleDayIsNotActiveError(
+                        status_code=409,
+                        detail=_("Associated schedule day is inactive or not found."),
+                    ) from err
+
         async with self._uow:
             updated_appointment = await self._uow.appointment_repository.update(
                 appointment
             )
 
-        # Load related patient and doctor
         patient = (
-            await self._user_service.get_by_id(updated_appointment.patient_id)
-            if schema.patient_id
+            await self._patients_service.get_by_id(updated_appointment.patient_id)
+            if updated_appointment.patient_id
             else None
         )
 
@@ -526,23 +559,22 @@ class AppointmentService:
 
     async def create_appointment(
         self, schedule_day_id: UUID, schema: CreateAppointmentSchema
-    ) -> Tuple[AppointmentDomain, Optional[UserDomain], UserDomain, time, date]:
-        # Get schedule day
-        schedule_day = await self._schedule_day_repository.get_by_id(schedule_day_id)
-        self._check_schedule_day_exists(schedule_day, schedule_day_id)
-
-        # Get schedule and check active
-        schedule = await self._schedule_repository.get_schedule_by_day_id(
-            schedule_day_id
+    ) -> Tuple[AppointmentDomain, Optional[PatientDomain], UserDomain, time, date]:
+        schedule_day = self._check_schedule_day_exists(
+            await self._schedule_day_repository.get_by_id(schedule_day_id),
+            schedule_day_id,
         )
-        self._check_schedule_exists(schedule, schedule_day_id)
+
+        schedule = self._check_schedule_exists(
+            await self._schedule_repository.get_schedule_by_day_id(schedule_day_id),
+            schedule_day_id,
+        )
         if not schedule.is_active:
             raise ScheduleIsNotActiveError(
                 status_code=409,
                 detail=_("Associated schedule is inactive or not found."),
             )
 
-        # Get doctor
         doctor = await self._user_service.get_by_id(schedule.doctor_id)
         if not doctor:
             raise NoInstanceFoundError(
@@ -551,7 +583,6 @@ class AppointmentService:
                 % {"ID": schedule.doctor_id},
             )
 
-        # Check support for patient, referral, insurance types
         if schema.patient_type:
             AppointmentService._check_support(
                 schema.patient_type,
@@ -581,10 +612,8 @@ class AppointmentService:
                 "The specialist does not support the provided insurance type.",
             )
 
-        # Check patient exists if provided
         if schema.patient_id:
-            # TODO: Replace with check in patients table instead of users
-            await self._user_service.get_by_id(schema.patient_id)
+            await self._patients_service.get_by_id(schema.patient_id)
 
         if not schedule_day.is_active:
             raise ScheduleIsNotActiveError(
@@ -596,7 +625,6 @@ class AppointmentService:
         appointment_start_datetime = datetime.combine(schedule_day.date, schema.time)
         appointment_end_datetime = appointment_start_datetime + appointment_interval
 
-        # Validate working hours
         self._validate_appointment_within_working_hours(
             appointment_start_datetime,
             appointment_end_datetime,
@@ -605,7 +633,6 @@ class AppointmentService:
             schema.time,
         )
 
-        # Check break overlap
         if schedule_day.break_start_time and schedule_day.break_end_time:
             break_start_datetime = datetime.combine(
                 schedule_day.date, schedule_day.break_start_time
@@ -621,7 +648,6 @@ class AppointmentService:
                     detail=_("The appointment cannot overlap with the break time."),
                 )
 
-        # Check overlapping appointments
         existing_appointments = (
             await self._appointment_repository.get_appointments_by_day_id(
                 schedule_day_id
@@ -650,7 +676,7 @@ class AppointmentService:
             )
 
         patient = (
-            await self._user_service.get_by_id(schema.patient_id)
+            await self._patients_service.get_by_id(schema.patient_id)
             if schema.patient_id
             else None
         )

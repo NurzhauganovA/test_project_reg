@@ -164,6 +164,7 @@ async def test_update_patient_success(patient_service, mock_uow, dummy_domain_pa
     updated.attached_clinic_id = dummy_domain_patient.attached_clinic_id
     updated.financing_sources_ids = dummy_domain_patient.financing_sources_ids
     updated.context_attributes_ids = dummy_domain_patient.context_attributes_ids
+    updated.attachment_data = dummy_domain_patient.attachment_data
 
     patient_service._patients_repository.get_by_id = AsyncMock(return_value=updated)
 

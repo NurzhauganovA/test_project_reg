@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from src.apps.assets_journal.domain.models.stationary_asset import StationaryAssetDomain
+from src.apps.assets_journal.domain.models.stationary_asset import StationaryAssetDomain, StationaryAssetListItemDomain
 from src.apps.assets_journal.infrastructure.api.schemas.responses.stationary_asset_schemas import (
     StationaryAssetStatisticsSchema,
 )
@@ -37,7 +37,7 @@ class StationaryAssetRepositoryInterface(ABC):
             filters: Dict[str, any],
             page: int = 1,
             limit: int = 30,
-    ) -> List[StationaryAssetDomain]:
+    ) -> List[StationaryAssetListItemDomain]:
         """
         Получить список активов с фильтрацией и пагинацией
 

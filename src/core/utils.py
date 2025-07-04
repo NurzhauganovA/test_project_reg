@@ -9,6 +9,9 @@ from src.apps.catalogs.infrastructure.api.citizenship_catalog_routes import (
 from src.apps.catalogs.infrastructure.api.financing_sources_catalog_routes import (
     financing_sources_catalog_router,
 )
+from src.apps.catalogs.infrastructure.api.insurance_info_catalog_routes import (
+    insurance_info_catalog_router,
+)
 from src.apps.catalogs.infrastructure.api.medical_organizations_catalog_routes import (
     medical_organizations_router,
 )
@@ -97,6 +100,10 @@ def get_routers() -> List[Dict[str, Any]]:
         {
             "router": medical_organizations_router,
             "tag": ["Medical organizations routes"],
+        },
+        {
+            "router": insurance_info_catalog_router,
+            "tag": ["Insurance info catalog routes"],
         },
         {
             "router": patients_router,

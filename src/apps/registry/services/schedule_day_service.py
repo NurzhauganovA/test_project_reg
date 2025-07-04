@@ -98,8 +98,6 @@ class ScheduleDayService:
             if appointment.status == AppointmentStatusEnum.BOOKED
         ]
 
-        # TODO: Move this day's appointment entries to the "WAITING LIST"
-
         new_start = update_data.work_start_time or day.work_start_time
         new_end = update_data.work_end_time or day.work_end_time
 
@@ -154,11 +152,26 @@ class ScheduleDayService:
                         appointment_end_time <= break_start
                         or appointment_start_time >= break_end
                     ):
-                        # TODO: Move this day's appointment entries to the "WAITING LIST"
+                        # Cancel the appointment (appointment -> 'Cancel list')
                         async with self._uow:
-                            await self._uow.appointment_repository.delete_by_id(
-                                booked_appointment.id
+                            booked_appointment.cancel()
+                            await self._uow.appointment_repository.update(
+                                booked_appointment
                             )
+
+        # Check if the day is deactivated (is_active changes from True to False)
+        is_deactivating = False
+        if "is_active" in update_data.model_fields_set:
+            new_is_active = update_data.is_active
+            if day.is_active and (new_is_active is False):
+                is_deactivating = True
+
+        # If deactivation, we cancel all booked appointments
+        if is_deactivating and booked_appointments:
+            for booked_appointment in booked_appointments:
+                async with self._uow:
+                    booked_appointment.cancel()
+                    await self._uow.appointment_repository.update(booked_appointment)
 
         update_schema = UpdateScheduleDaySchema(
             is_active=(
@@ -203,8 +216,11 @@ class ScheduleDayService:
         ]
 
         if booked_appointments:
-            # TODO: Move this day's appointment entries to the "WAITING LIST"
-            pass
+            for booked_appointment in booked_appointments:
+                # Cancel the appointment (appointment -> 'Cancel list')
+                async with self._uow:
+                    booked_appointment.cancel()
+                    await self._uow.appointment_repository.update(booked_appointment)
 
         async with self._uow:
             await self._uow.schedule_day_repository.delete_by_id(day_id)

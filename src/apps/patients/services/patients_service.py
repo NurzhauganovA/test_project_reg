@@ -61,14 +61,20 @@ class PatientService:
         # ONE-to-ONE relations
         await self._citizenship_service.get_by_id(patient.citizenship_id)
         await self._nationalities_service.get_by_id(patient.nationality_id)
-        await self._medical_org_service.get_by_id(patient.attached_clinic_id)
+
+        attachment_data = patient.attachment_data
+        if attachment_data:
+            attached_clinic_id = attachment_data.get("attached_clinic_id")
+            if attached_clinic_id:
+                await self._medical_org_service.get_by_id(attached_clinic_id)
 
         # MANY-to-MANY relations
         for source_id in patient.financing_sources_ids:
             await self._financing_source_service.get_by_id(source_id)
 
-        for attribute_id in patient.context_attributes_ids:
-            await self._patient_context_attributes_service.get_by_id(attribute_id)
+        if patient.context_attributes_ids:
+            for attribute_id in patient.context_attributes_ids:
+                await self._patient_context_attributes_service.get_by_id(attribute_id)
 
     async def get_by_id(self, patient_id: UUID) -> PatientDomain:
         patient = await self._patients_repository.get_by_id(patient_id)
@@ -142,7 +148,7 @@ class PatientService:
             existing_patient_by_iin = await self._patients_repository.get_by_iin(
                 dto.iin
             )
-            if existing_patient_by_iin:
+            if existing_patient_by_iin and existing_patient_by_iin.id != patient_id:
                 raise InstanceAlreadyExistsError(
                     status_code=409,
                     detail=_("Patient with IIN: '%(IIN)s' already exists.")
@@ -155,8 +161,8 @@ class PatientService:
         async with self._uow:
             await self._uow.patients_repository.update_patient(patient_to_update)
 
-        # Get fresh patients since 'update_patient' method doesn't reload a query
-        fresh_patient: PatientDomain = await self._patients_repository.get_by_id(
+        # Get fresh patients since 'update_patient' repository method doesn't reload a query
+        fresh_patient: PatientDomain | None = await self._patients_repository.get_by_id(
             patient_id
         )
         if fresh_patient is None:

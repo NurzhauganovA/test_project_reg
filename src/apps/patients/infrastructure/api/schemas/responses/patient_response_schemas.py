@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Optional, Union
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from src.apps.patients.domain.enums import (
 )
 from src.apps.patients.infrastructure.api.schemas.jsonb_fields_schemas import (
     PatientAddressItemSchema,
+    PatientAttachmentDataItemSchema,
     PatientContactInfoItemSchema,
     PatientRelativeItemSchema,
 )
@@ -30,10 +31,10 @@ class ResponsePatientSchema(BaseModel):
     citizenship_id: int
     nationality_id: int
     financing_sources_ids: List[int]
-    context_attributes_ids: List[int]
+    context_attributes_ids: Optional[List[int]]
     social_status: PatientSocialStatusEnum
     marital_status: PatientMaritalStatusEnum
-    attached_clinic_id: int
+    attachment_data: Optional[PatientAttachmentDataItemSchema] = None
     relatives: Optional[List[PatientRelativeItemSchema]] = None
     addresses: Optional[List[PatientAddressItemSchema]] = None
     contact_info: Optional[List[PatientContactInfoItemSchema]] = None
@@ -41,5 +42,5 @@ class ResponsePatientSchema(BaseModel):
 
 
 class MultiplePatientsResponseSchema(BaseModel):
-    items: List[Union[ResponsePatientSchema,]]
+    items: List[ResponsePatientSchema]
     pagination: PaginationMetaDataSchema

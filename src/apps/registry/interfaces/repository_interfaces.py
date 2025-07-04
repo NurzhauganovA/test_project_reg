@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from src.apps.registry.domain.models.appointment import AppointmentDomain
@@ -42,22 +42,18 @@ class AppointmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_by_schedule_id_and_period(
+    async def get_appointments(
         self,
-        schedule_id: UUID,
-        period_start: date,
-        period_end: date,
+        filters: Dict[str, Any],
         limit: int = 30,
         page: int = 1,
     ) -> List[AppointmentDomain]:
         """
-        Returns a list of scheduled appointment records for the specified date range.
+        Returns a list of scheduled appointment records filtered by the provided params.
 
+        :param filters: Dictionary of filter parameters.
         :param limit: Pagination limit per page.
         :param page: Pagination page.
-        :param schedule_id: Schedule ID.
-        :param period_start: Period start date.
-        :param period_end: Period end date.
 
         :return: List of 'AppointmentDomain' objects.
         """

@@ -28,6 +28,37 @@ sys.exit(0)
 END
 }
 
+check_kafka() {
+  python << 'END'
+import os, sys, socket, json
+
+raw = os.getenv('KAFKA_BOOTSTRAP_SERVERS', '[]')
+try:
+    servers = json.loads(raw)
+    server = servers[0]
+except Exception:
+    server = raw.split(',')[0].strip()
+
+if server.startswith("tcp://"):
+    server = server[len("tcp://"):]
+
+host, port_str = server.split(":", 1)
+port = int(port_str)
+
+sock = socket.socket()
+sock.settimeout(5)
+try:
+    sock.connect((host, port))
+    print("Kafka is up - continuing...")
+    sys.exit(0)
+except Exception as e:
+    print(f"Kafka connection failed: {e}")
+    sys.exit(1)
+finally:
+    sock.close()
+END
+}
+
 # Waiting for a DB
 echo "Checking PostgreSQL readiness..."
 until check_db; do
@@ -39,14 +70,12 @@ done
 echo "Running migrations…"
 alembic upgrade head
 
-# Пропускаем проверку Kafka - закомментировано
-# echo "Checking Kafka readiness..."
-# until check_kafka; do
-#   echo "Kafka is unavailable - waiting..."
-#   sleep 1
-# done
-
-echo "Skipping Kafka check for development..."
+# Waiting for Kafka
+echo "Checking Kafka readiness..."
+until check_kafka; do
+  echo "Kafka is unavailable - waiting..."
+  sleep 1
+done
 
 # Application startup
 echo "Starting application…"

@@ -183,9 +183,10 @@ class SQLAlchemyPatientRepository(BaseRepository, PatientRepositoryInterface):
         mapped_patient = map_patient_domain_to_db_entity(patient_domain)
 
         # Update JSONB fields with primitive data
-        db_patient.relatives = mapped_patient.relatives or []
-        db_patient.addresses = mapped_patient.addresses or []
-        db_patient.contact_info = mapped_patient.contact_info or []
+        db_patient.attachment_data = mapped_patient.attachment_data
+        db_patient.relatives = mapped_patient.relatives
+        db_patient.addresses = mapped_patient.addresses
+        db_patient.contact_info = mapped_patient.contact_info
 
         # Update scalar fields from domain
         SCALAR_FIELDS = [
@@ -200,7 +201,6 @@ class SQLAlchemyPatientRepository(BaseRepository, PatientRepositoryInterface):
             "nationality_id",
             "social_status",
             "marital_status",
-            "attached_clinic_id",
             "profile_status",
         ]
         for field in SCALAR_FIELDS:

@@ -207,16 +207,16 @@ msgstr "Переданное имя национальности (КАЗ): '%(NA
 
 # Patient context attributes service errors
 msgid "Patient context attribute with ID: %(ATTR_ID)s was not found."
-msgstr "Атрибут контекста пациента с ID: %(ATTR_ID)s не найден."
+msgstr "Дополнительный признак пациента с ID: %(ATTR_ID)s не найден."
 
 msgid "Attribute with name: '%(NAME)s' already exists."
-msgstr "Атрибут с именем: '%(NAME)s' уже существует."
+msgstr "Дополнительный признак пациента с именем: '%(NAME)s' уже существует."
 
 msgid "Attribute's '%(CODE)s' locale: '%(VALUE)s' already exists in some record's locale. It's already taken."
 msgstr "Локаль '%(CODE)s' со значением '%(VALUE)s' уже используется в другой записи. Она уже занята."
 
 msgid "Attribute with id: %(ID)s not found."
-msgstr "Атрибут с id: %(ID)s не найден."
+msgstr "Дополнительный признак пациента с id: %(ID)s не найден."
 
 # Financing sources service errors
 msgid "Financing source with ID: %(SRC_ID)s was not found."
@@ -282,3 +282,10 @@ msgstr "Пациент с ИИН: '%(IIN)s' не найден."
 
 msgid "Patient with IIN: '%(IIN)s' already exists."
 msgstr "Пациент с ИИН: '%(IIN)s' уже существует."
+
+# Insurance info catalog errors
+msgid "'valid_till' date must be equal or greater than 'valid_from' date."
+msgstr "Дата, переданная в поле 'valid_till' должна быть больше или равна дате в поле 'valid_from'."
+
+msgid "Insurance info record with ID: %(ID)s was not found."
+msgstr "Запись страхования с ID: %(ID)s не найдена."

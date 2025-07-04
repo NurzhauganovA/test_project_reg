@@ -1,9 +1,12 @@
-from typing import Dict
+from datetime import date
+from typing import Dict, List
+from uuid import UUID
 
 from sqlalchemy import String
 from sqlalchemy.dialects.postgresql.json import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql.sqltypes import Integer
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.schema import ForeignKey
+from sqlalchemy.sql.sqltypes import Date, Integer
 
 from src.shared.infrastructure.base import Base, ChangedAtMixin, CreatedAtMixin
 
@@ -95,6 +98,15 @@ class SQLAlchemyFinancingSourcesCatalog(Base, ChangedAtMixin, CreatedAtMixin):
         comment="Financing source's name additional locales",
     )
 
+    insurance_info_records: Mapped[List["SQLAlchemyInsuranceInfoCatalogue"]] = (
+        relationship(
+            "SQLAlchemyInsuranceInfoCatalogue",
+            back_populates="financing_source",
+            lazy="selectin",
+            cascade="all, delete-orphan",
+        )
+    )
+
 
 class SQLAlchemyMedicalOrganizationsCatalogue(Base, ChangedAtMixin, CreatedAtMixin):
     __tablename__ = "cat_medical_organizations"
@@ -129,4 +141,47 @@ class SQLAlchemyMedicalOrganizationsCatalogue(Base, ChangedAtMixin, CreatedAtMix
         JSONB,
         nullable=True,
         comment="Medical organization's address additional locales",
+    )
+
+
+class SQLAlchemyInsuranceInfoCatalogue(Base, ChangedAtMixin, CreatedAtMixin):
+    __tablename__ = "cat_insurance_info"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    policy_number: Mapped[str] = mapped_column(
+        String(50), nullable=True, comment="Insurance policy number"
+    )
+    company: Mapped[str] = mapped_column(
+        String(100), nullable=True, comment="Insurance company name"
+    )
+    valid_from: Mapped[date] = mapped_column(
+        Date, nullable=True, comment="Insurance valid from"
+    )
+    valid_till: Mapped[date] = mapped_column(
+        Date, nullable=True, comment="Insurance valid till"
+    )
+    comment: Mapped[str] = mapped_column(
+        String(256), nullable=True, comment="Insurance comment"
+    )
+
+    # Relations with different tables
+    patient_id: Mapped[UUID] = mapped_column(
+        ForeignKey("patients.id"), nullable=False, comment="Insurance ID"
+    )
+    patient: Mapped["SQLAlchemyPatient"] = relationship(  # noqa: F821
+        "SQLAlchemyPatient",
+        back_populates="insurances",
+        lazy="selectin",
+    )
+
+    financing_source_id: Mapped[int] = mapped_column(
+        ForeignKey("cat_financing_sources.id"),
+        nullable=False,
+        comment="Financing source ID",
+    )
+    financing_source: Mapped["SQLAlchemyFinancingSourcesCatalog"] = relationship(
+        "SQLAlchemyFinancingSourcesCatalog",
+        back_populates="insurance_info_records",
+        lazy="selectin",
     )

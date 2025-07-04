@@ -1,6 +1,7 @@
 from dependency_injector import containers, providers
 from fastapi import FastAPI
 
+from src.apps.assets_journal.container import AssetsJournalContainer
 from src.apps.catalogs.container import CatalogsContainer
 from src.apps.medical_staff_journal.container import MedicalStaffJournalContainer
 from src.apps.patients.container import PatientsContainer
@@ -17,7 +18,6 @@ from src.core.utils import get_exception_handlers, get_routers
 from src.shared.infrastructure.auth_service_adapter.container import (
     AuthServiceContainer,
 )
-from src.apps.assets_journal.container import AssetsJournalContainer
 
 
 class CoreContainer(containers.DeclarativeContainer):
@@ -88,15 +88,6 @@ class CoreContainer(containers.DeclarativeContainer):
         engine=engine,
     )
 
-    registry_container = providers.Container(
-        RegistryContainer,
-        logger=logger,
-        engine=engine,
-        user_service=users_container.user_service,
-        user_repository=users_container.user_repository,
-        platform_rules_repository=platform_rules_container.platform_rules_repository,
-    )
-
     medical_staff_journal_container = providers.Container(
         MedicalStaffJournalContainer,
         httpx_client=httpx_client,
@@ -108,25 +99,52 @@ class CoreContainer(containers.DeclarativeContainer):
         CatalogsContainer,
         logger=logger,
         engine=engine,
+        # patients_container is below
     )
 
     patients_container = providers.Container(
         PatientsContainer,
         logger=logger,
         engine=engine,
-        citizenship_service=catalogs_container.citizenship_catalog_service,
-        nationalities_service=catalogs_container.nationalities_catalog_service,
-        medical_org_service=catalogs_container.medical_organizations_catalog_service,
-        financing_source_service=catalogs_container.financing_sources_catalog_service,
-        patient_context_attributes_service=catalogs_container.patient_context_attributes_service,
+        # catalogs are below
     )
 
-    # Assets Journal container
-    assets_journal_container = providers.Container(
-        AssetsJournalContainer,
+    registry_container = providers.Container(
+        RegistryContainer,
         logger=logger,
         engine=engine,
+        user_service=users_container.user_service,
+        patients_service=patients_container.patients_service,
+        user_repository=users_container.user_repository,
+        platform_rules_repository=platform_rules_container.platform_rules_repository,
     )
+
+    # OVERRIDE --------------------------------------------------------------------------------------------------------
+    """
+    Override is needed here because of the cyclic dependency between catalogs container and patients container.
+    """
+    catalogs_container.override(
+        providers.Container(
+            CatalogsContainer,
+            logger=logger,
+            engine=engine,
+            patients_service=patients_container.patients_service,
+        )
+    )
+
+    patients_container.override(
+        providers.Container(
+            PatientsContainer,
+            logger=logger,
+            engine=engine,
+            citizenship_service=catalogs_container.citizenship_catalog_service,
+            nationalities_service=catalogs_container.nationalities_catalog_service,
+            medical_org_service=catalogs_container.medical_organizations_catalog_service,
+            financing_source_service=catalogs_container.financing_sources_catalog_service,
+            patient_context_attributes_service=catalogs_container.patient_context_attributes_service,
+        )
+    )
+    # --------------------------------------------------------------------------------------------------------
 
     # Shared adapters containers
     auth_container = providers.Container(
@@ -134,4 +152,11 @@ class CoreContainer(containers.DeclarativeContainer):
         httpx_client=httpx_client,
         base_url=config.AUTH_SERVICE_BASE_URL,
         logger=logger,
+    )
+
+    # Assets Journal container
+    assets_journal_container = providers.Container(
+        AssetsJournalContainer,
+        logger=logger,
+        engine=engine,
     )

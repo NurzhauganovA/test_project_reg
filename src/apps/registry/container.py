@@ -30,6 +30,7 @@ class RegistryContainer(containers.DeclarativeContainer):
     # Dependencies from core DI-container
     logger = providers.Dependency(instance_of=LoggerService)
     user_service = providers.Dependency()
+    patients_service = providers.Dependency()
     user_repository = providers.Dependency()
     platform_rules_repository = providers.Dependency()
     engine = providers.Dependency(instance_of=AsyncEngine)
@@ -87,6 +88,7 @@ class RegistryContainer(containers.DeclarativeContainer):
         schedule_repository=schedule_repository,
         schedule_day_repository=schedule_day_repository,
         user_service=user_service,
+        patients_service=patients_service,
         user_repository=user_repository,
     )
 

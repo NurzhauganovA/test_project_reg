@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import Integer, and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql.json import JSONB
-from sqlalchemy.sql.elements import ClauseElement
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import column
 
 from src.apps.registry.domain.models.schedule import ScheduleDomain
@@ -20,6 +20,64 @@ from src.shared.infrastructure.base import BaseRepository
 
 
 class ScheduleRepositoryImpl(BaseRepository, ScheduleRepositoryInterface):
+    @staticmethod
+    def _apply_filters_to_query(query, filters: Dict[str, Any]):
+        DoctorAlias = aliased(User)
+        query = query.join(DoctorAlias, Schedule.doctor)
+
+        if filters.get("name_filter"):
+            query = query.where(Schedule.schedule_name == filters["name_filter"])
+
+        if filters.get("doctor_id_filter"):
+            query = query.where(Schedule.doctor_id == filters["doctor_id_filter"])
+
+        if "status_filter" in filters:
+            query = query.where(Schedule.is_active == filters["status_filter"])
+
+        if filters.get("doctor_iin_filter"):
+            query = query.where(DoctorAlias.iin == filters["doctor_iin_filter"])
+
+        if filters.get("serviced_area_number_filter") is not None:
+            query = query.where(
+                and_(
+                    DoctorAlias.attachment_data["area_number"].isnot(None),
+                    cast(DoctorAlias.attachment_data["area_number"].astext, Integer)
+                    == filters["serviced_area_number_filter"],
+                )
+            )
+
+        if filters.get("doctor_full_name_filter"):
+            full_value = filters["doctor_full_name_filter"].strip().lower()
+            query = query.where(
+                func.lower(DoctorAlias.full_name).ilike(f"%{full_value}%")
+            )
+
+        specialization_names = filters.get("doctor_specializations_filter") or []
+        if specialization_names:
+            elements_source = func.jsonb_array_elements(
+                DoctorAlias.specializations
+            ).table_valued(column("value", JSONB), name="unnested_specs_alias")
+            element_name_as_text = elements_source.c.value.op("->>")("name")
+
+            specialization_clauses = []
+            for specialization in specialization_names:
+                if specialization:
+                    exists_clause = (
+                        select(True)
+                        .select_from(elements_source)
+                        .where(
+                            func.lower(element_name_as_text).ilike(
+                                f"%{specialization.lower()}%"
+                            )
+                        )
+                        .exists()
+                    )
+                    specialization_clauses.append(exists_clause)
+            if specialization_clauses:
+                query = query.where(or_(*specialization_clauses))
+
+        return query
+
     async def get_total_number_of_schedules(self) -> int:
         query = select(func.count(Schedule.id))
         result = await self._async_db_session.execute(query)
@@ -55,68 +113,9 @@ class ScheduleRepositoryImpl(BaseRepository, ScheduleRepositoryInterface):
         page: int = 1,
         limit: int = 30,
     ) -> List[ScheduleDomain]:
-        query = select(Schedule).join(Schedule.doctor)
-
-        if filters.get("name_filter"):
-            query = query.where(Schedule.schedule_name == filters["name_filter"])
-
-        if filters.get("doctor_id_filter"):
-            query = query.where(Schedule.doctor_id == filters["doctor_id_filter"])
-
-        if filters.get("status_filter") is not None:
-            query = query.where(Schedule.is_active == filters["status_filter"])
-
-        if filters.get("serviced_area_number_filter") is not None:
-            query = query.where(
-                and_(
-                    Schedule.doctor.has(
-                        User.attachment_data["area_number"].isnot(None)
-                    ),
-                    Schedule.doctor.has(
-                        cast(User.attachment_data["area_number"].astext, Integer)
-                        == filters["serviced_area_number_filter"]
-                    ),
-                )
-            )
-
-        if filters.get("doctor_full_name_filter"):
-            full_value = filters["doctor_full_name_filter"].strip().lower()
-            parts = [p for p in full_value.split() if p]
-            name_clauses = [
-                or_(
-                    func.lower(User.first_name).ilike(f"%{part}%"),
-                    func.lower(User.last_name).ilike(f"%{part}%"),
-                    func.lower(func.coalesce(User.middle_name, "")).ilike(f"%{part}%"),
-                )
-                for part in parts
-            ]
-            if name_clauses:
-                query = query.where(and_(*name_clauses))
-
-        # Filter by doctor's specialties
-        specialization_names: List[str] = (
-            filters.get("doctor_specializations_filter") or []
-        )
-        specialization_clauses: List[ClauseElement] = []
-        if specialization_names:
-            elements_source = func.jsonb_array_elements(
-                User.specializations
-            ).table_valued(column("value", JSONB), name="unnested_specs_alias")
-            element_name_as_text = elements_source.c.value.op("->>")("name")
-
-            for spec in specialization_names:
-                if spec:
-                    exists_clause = (
-                        select(True)
-                        .select_from(elements_source)
-                        .where(
-                            func.lower(element_name_as_text).ilike(f"%{spec.lower()}%")
-                        )
-                        .exists()
-                    )
-                    specialization_clauses.append(exists_clause)
-            if specialization_clauses:
-                query = query.where(or_(*specialization_clauses))
+        query = select(Schedule)
+        # Applying filters...
+        query = self._apply_filters_to_query(query, filters)
 
         # Pagination
         query = query.limit(limit).offset((page - 1) * limit)
