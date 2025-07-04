@@ -13,6 +13,8 @@ from src.apps.catalogs.infrastructure.db_models.models import *  # noqa: F401,F4
 from src.apps.patients.infrastructure.db_models.association_tables import *  # noqa: F401,F403
 from src.apps.patients.infrastructure.db_models.patients import *  # noqa: F401,F403
 
+from src.apps.assets_journal.infrastructure.db_models.models import * # noqa: F401,F403
+
 from src.core.settings import Settings
 from src.shared.infrastructure.base import Base
 

@@ -17,6 +17,7 @@ from src.core.utils import get_exception_handlers, get_routers
 from src.shared.infrastructure.auth_service_adapter.container import (
     AuthServiceContainer,
 )
+from src.apps.assets_journal.container import AssetsJournalContainer
 
 
 class CoreContainer(containers.DeclarativeContainer):
@@ -118,6 +119,13 @@ class CoreContainer(containers.DeclarativeContainer):
         medical_org_service=catalogs_container.medical_organizations_catalog_service,
         financing_source_service=catalogs_container.financing_sources_catalog_service,
         patient_context_attributes_service=catalogs_container.patient_context_attributes_service,
+    )
+
+    # Assets Journal container
+    assets_journal_container = providers.Container(
+        AssetsJournalContainer,
+        logger=logger,
+        engine=engine,
     )
 
     # Shared adapters containers

@@ -42,6 +42,9 @@ from src.shared.exceptions import (
     DependencyError,
     RpnIntegrationServiceError,
 )
+from src.apps.assets_journal.infrastructure.api.stationary_asset_routes import (
+    stationary_assets_router,
+)
 
 T = TypeVar("T")
 
@@ -98,6 +101,12 @@ def get_routers() -> List[Dict[str, Any]]:
         {
             "router": patients_router,
             "tag": ["Patient routes"],
+        },
+
+        # Assets Journal routes
+        {
+            "router": stationary_assets_router,
+            "tag": ["Stationary assets routes"],
         },
     ]
 

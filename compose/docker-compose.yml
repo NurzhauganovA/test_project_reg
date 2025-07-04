@@ -18,8 +18,8 @@ services:
   registry-db:
     container_name: registry-module-db-dev
     image: postgres:17-alpine
-    ports:
-      - "5432:5432"
+    #ports:
+    #  - "5432:5432"
     env_file:
       - ../.envs/db/dev.env
     volumes:
