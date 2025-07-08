@@ -22,11 +22,11 @@ class StationaryAssetDomain:
             bg_asset_id: Optional[str] = None,
             card_number: Optional[str] = None,
 
+            # Данные об организации
+            organization_id: UUID,
+
             # Данные о пациенте
-            patient_full_name: str,
-            patient_iin: str,
-            patient_birth_date: datetime,
-            patient_address: Optional[str] = None,
+            patient_id: UUID,
 
             # Данные о получении актива
             receive_date: datetime,
@@ -61,14 +61,16 @@ class StationaryAssetDomain:
             # Метаданные
             created_at: Optional[datetime] = None,
             updated_at: Optional[datetime] = None,
+
+            # Связанные данные
+            patient_data: Optional[dict] = None,
+            organization_data: Optional[dict] = None,
     ):
         self.id = id
         self.bg_asset_id = bg_asset_id
         self.card_number = card_number
-        self.patient_full_name = patient_full_name
-        self.patient_iin = patient_iin
-        self.patient_birth_date = patient_birth_date
-        self.patient_address = patient_address
+        self.organization_id = organization_id
+        self.patient_id = patient_id
         self.receive_date = receive_date
         self.receive_time = receive_time
         self.actual_datetime = actual_datetime
@@ -89,6 +91,9 @@ class StationaryAssetDomain:
         self.has_refusal = has_refusal
         self.created_at = created_at
         self.updated_at = updated_at
+
+        self.patient_data = patient_data
+        self.organization_data = organization_data
 
     def update_status(self, new_status: AssetStatusEnum) -> None:
         """Обновить статус актива"""
@@ -140,25 +145,29 @@ class StationaryAssetDomain:
         return self.has_refusal
 
     @property
-    def patient_age(self) -> Optional[int]:
-        """Вычислить возраст пациента"""
-        if not self.patient_birth_date:
-            return None
-        today = datetime.now().date()
-        birth_date = self.patient_birth_date.date()
-        age = today.year - birth_date.year
-        if today.month < birth_date.month or (today.month == birth_date.month and today.day < birth_date.day):
-            age -= 1
-        return age
+    def receive_datetime(self) -> datetime:
+        """Объединенная дата и время получения"""
+        return self.actual_datetime or datetime.combine(self.receive_date.date(), self.receive_time)
 
     @property
-    def receive_datetime(self) -> Optional[datetime]:
-        """Объединенная дата и время получения"""
-        if self.actual_datetime:
-            return self.actual_datetime
-        if self.receive_date and self.receive_time:
-            # Объединяем дату и время
-            return datetime.combine(self.receive_date.date(), self.receive_time)
+    def patient_full_name(self) -> Optional[str]:
+        """Получить ФИО пациента из связанных данных"""
+        if self.patient_data:
+            return f"{self.patient_data.get('last_name', '')} {self.patient_data.get('first_name', '')} {self.patient_data.get('middle_name', '') or ''}".strip()
+        return None
+
+    @property
+    def patient_iin(self) -> Optional[str]:
+        """Получить ИИН пациента из связанных данных"""
+        if self.patient_data:
+            return self.patient_data.get('iin')
+        return None
+
+    @property
+    def patient_birth_date(self) -> Optional[datetime]:
+        """Получить дату рождения пациента из связанных данных"""
+        if self.patient_data:
+            return self.patient_data.get('date_of_birth')
         return None
 
     def _get_status_display(self) -> str:
@@ -189,14 +198,16 @@ class StationaryAssetListItemDomain:
     def __init__(
             self,
             id: UUID,
-            card_number: str,
+            card_number: Optional[str],
+            organization_name: str,
+            patient_id: UUID,
             patient_full_name: str,
             patient_iin: str,
             patient_birth_date: datetime,
-            specialization: str,
+            diagnosis_name: str,
+            specialization: Optional[str],
             specialist: str,
             area: str,
-            diagnosis: str,
             status: AssetStatusEnum,
             delivery_status: AssetDeliveryStatusEnum,
             receive_date: datetime,
@@ -206,13 +217,15 @@ class StationaryAssetListItemDomain:
     ):
         self.id = id
         self.card_number = card_number
+        self.organization_name = organization_name
+        self.patient_id = patient_id
         self.patient_full_name = patient_full_name
         self.patient_iin = patient_iin
         self.patient_birth_date = patient_birth_date
+        self.diagnosis_name = diagnosis_name
         self.specialization = specialization
         self.specialist = specialist
         self.area = area
-        self.diagnosis = diagnosis
         self.status = status
         self.delivery_status = delivery_status
         self.receive_date = receive_date

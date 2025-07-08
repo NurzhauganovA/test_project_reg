@@ -1,5 +1,6 @@
 from datetime import datetime, time
 from typing import Optional
+from uuid import UUID
 
 from src.apps.assets_journal.domain.models.stationary_asset import StationaryAssetDomain
 from src.apps.assets_journal.infrastructure.api.schemas.requests.stationary_asset_schemas import (
@@ -18,10 +19,8 @@ def map_stationary_asset_domain_to_db(domain: StationaryAssetDomain) -> Stationa
         id=domain.id,
         bg_asset_id=domain.bg_asset_id,
         card_number=domain.card_number,
-        patient_full_name=domain.patient_full_name,
-        patient_iin=domain.patient_iin,
-        patient_birth_date=domain.patient_birth_date,
-        patient_address=domain.patient_address,
+        organization_id=domain.organization_id,
+        patient_id=domain.patient_id,
         receive_date=domain.receive_date,
         receive_time=domain.receive_time,
         actual_datetime=domain.actual_datetime,
@@ -45,14 +44,33 @@ def map_stationary_asset_domain_to_db(domain: StationaryAssetDomain) -> Stationa
 
 def map_stationary_asset_db_to_domain(db_asset: StationaryAsset) -> StationaryAssetDomain:
     """Маппинг DB модели в доменную модель"""
+
+    organization_data = None
+    if db_asset.organization:
+        organization_data = {
+            'id': str(db_asset.organization.id),
+            'name': db_asset.organization.name,
+            'code': db_asset.organization.code,
+        }
+
+    patient_data = None
+    if db_asset.patient:
+        patient_data = {
+            'id': str(db_asset.patient.id),
+            'iin': db_asset.patient.iin,
+            'first_name': db_asset.patient.first_name,
+            'last_name': db_asset.patient.last_name,
+            'middle_name': db_asset.patient.middle_name,
+            'date_of_birth': db_asset.patient.date_of_birth,
+            'gender': db_asset.patient.gender.value if db_asset.patient.gender else None,
+        }
+
     return StationaryAssetDomain(
         id=db_asset.id,
         bg_asset_id=db_asset.bg_asset_id,
         card_number=db_asset.card_number,
-        patient_full_name=db_asset.patient_full_name,
-        patient_iin=db_asset.patient_iin,
-        patient_birth_date=db_asset.patient_birth_date,
-        patient_address=db_asset.patient_address,
+        organization_id=db_asset.organization_id,
+        patient_id=db_asset.patient_id,
         receive_date=db_asset.receive_date,
         receive_time=db_asset.receive_time,
         actual_datetime=db_asset.actual_datetime,
@@ -73,6 +91,8 @@ def map_stationary_asset_db_to_domain(db_asset: StationaryAsset) -> StationaryAs
         has_refusal=db_asset.has_refusal,
         created_at=db_asset.created_at,
         updated_at=db_asset.changed_at,
+        patient_data=patient_data,
+        organization_data=organization_data,
     )
 
 
@@ -82,10 +102,11 @@ def map_stationary_asset_domain_to_full_response(domain: StationaryAssetDomain) 
         id=domain.id,
         bg_asset_id=domain.bg_asset_id,
         card_number=domain.card_number,
+        organization_id=domain.organization_id,
+        patient_id=domain.patient_id,
         patient_full_name=domain.patient_full_name,
         patient_iin=domain.patient_iin,
         patient_birth_date=domain.patient_birth_date,
-        patient_address=domain.patient_address,
         receive_date=domain.receive_date,
         receive_time=domain.receive_time,
         actual_datetime=domain.actual_datetime,
@@ -105,6 +126,8 @@ def map_stationary_asset_domain_to_full_response(domain: StationaryAssetDomain) 
         has_refusal=domain.has_refusal,
         created_at=domain.created_at,
         updated_at=domain.updated_at,
+        organization_data=domain.organization_data,
+        patient_data=domain.patient_data,
     )
 
 
@@ -113,6 +136,9 @@ def map_stationary_asset_domain_to_list_item(domain: StationaryAssetDomain) -> S
     return StationaryAssetListItemSchema(
         id=domain.id,
         card_number=domain.card_number,
+        organization_id=domain.organization_id,
+        organization_name=domain.organization_data.get('name') if domain.organization_data else None,
+        patient_id=domain.patient_id,
         patient_full_name=domain.patient_full_name,
         patient_iin=domain.patient_iin,
         patient_birth_date=domain.patient_birth_date,
@@ -129,15 +155,13 @@ def map_stationary_asset_domain_to_list_item(domain: StationaryAssetDomain) -> S
     )
 
 
-def map_create_schema_to_domain(create_schema: CreateStationaryAssetSchema) -> StationaryAssetDomain:
+def map_create_schema_to_domain(create_schema: CreateStationaryAssetSchema, patient_id: UUID) -> StationaryAssetDomain:
     """Маппинг схемы создания в доменную модель"""
     return StationaryAssetDomain(
         bg_asset_id=create_schema.bg_asset_id,
         card_number=create_schema.card_number,
-        patient_full_name=create_schema.patient_full_name,
-        patient_iin=create_schema.patient_iin,
-        patient_birth_date=create_schema.patient_birth_date,
-        patient_address=create_schema.patient_address,
+        organization_id=create_schema.organization_id,
+        patient_id=patient_id,
         receive_date=create_schema.receive_date,
         receive_time=create_schema.receive_time,
         actual_datetime=create_schema.actual_datetime or create_schema.receive_date,
@@ -154,7 +178,7 @@ def map_create_schema_to_domain(create_schema: CreateStationaryAssetSchema) -> S
     )
 
 
-def map_bg_response_to_domain(bg_data: dict) -> StationaryAssetDomain:
+def map_bg_response_to_domain(bg_data: dict, patient_id: UUID) -> StationaryAssetDomain:
     """Маппинг ответа BG в доменную модель"""
     patient = bg_data.get("patient", {})
 
@@ -184,10 +208,8 @@ def map_bg_response_to_domain(bg_data: dict) -> StationaryAssetDomain:
     return StationaryAssetDomain(
         bg_asset_id=bg_data.get("id", ""),
         card_number=bg_data.get("cardNumber", ""),
-        patient_full_name=patient.get("personFullName", ""),
-        patient_iin=patient.get("personin", ""),
-        patient_birth_date=parse_datetime(patient.get("birthDate")) or datetime.utcnow(),
-        patient_address=bg_data.get("address", ""),
+        organization_id=bg_data.get("orgId"),
+        patient_id=patient_id,
         receive_date=reg_datetime,
         receive_time=reg_time,
         actual_datetime=parse_datetime(bg_data.get("hospitalDate")) or reg_datetime,
@@ -200,7 +222,7 @@ def map_bg_response_to_domain(bg_data: dict) -> StationaryAssetDomain:
         area=bg_data.get("area", "Общий"),
         specialization=bg_data.get("specialization", ""),
         specialist=bg_data.get("directDoctor", ""),
-        note=bg_data.get("addiditonalInformation"),
+        note=bg_data.get("additionalInformation"),
         has_confirm=bg_data.get("hasConfirm", "false").lower() == "true",
         has_files=bg_data.get("hasFiles", "false").lower() == "true",
         has_refusal=bg_data.get("hasRefusal", "false").lower() == "true",

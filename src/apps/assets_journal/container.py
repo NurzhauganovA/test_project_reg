@@ -10,6 +10,8 @@ from src.apps.assets_journal.services.stationary_asset_service import (
     StationaryAssetService,
 )
 from src.apps.assets_journal.uow import AssetsJournalUnitOfWorkImpl
+from src.apps.catalogs.services.medical_organizations_catalog_service import MedicalOrganizationsCatalogService
+from src.apps.patients.services.patients_service import PatientService
 from src.core.logger import LoggerService
 
 
@@ -27,6 +29,10 @@ class AssetsJournalContainer(containers.DeclarativeContainer):
     # Зависимости из основного контейнера
     logger = providers.Dependency(instance_of=LoggerService)
     engine = providers.Dependency(instance_of=AsyncEngine)
+
+    # Зависимости от других модулей
+    patient_service = providers.Dependency(instance_of=PatientService)
+    medical_organizations_catalog_service = providers.Dependency(instance_of=MedicalOrganizationsCatalogService)
 
     # Фабрика сессий
     session_factory = providers.Singleton(
@@ -61,5 +67,6 @@ class AssetsJournalContainer(containers.DeclarativeContainer):
         StationaryAssetService,
         uow=unit_of_work,
         stationary_asset_repository=stationary_asset_repository,
+        patient_service=patient_service,
         logger=logger,
     )

@@ -1,8 +1,9 @@
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from src.apps.assets_journal.domain.models.stationary_asset import StationaryAssetDomain
 from src.apps.assets_journal.infrastructure.api.schemas.responses.stationary_asset_schemas import (
@@ -16,6 +17,7 @@ from src.apps.assets_journal.mappers import (
     map_stationary_asset_db_to_domain,
     map_stationary_asset_domain_to_db,
 )
+from src.apps.patients.infrastructure.db_models.patients import SQLAlchemyPatient
 from src.core.logger import LoggerService
 from src.shared.infrastructure.base import BaseRepository
 
@@ -27,7 +29,14 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         super().__init__(async_db_session, logger)
 
     async def get_by_id(self, asset_id: UUID) -> Optional[StationaryAssetDomain]:
-        query = select(StationaryAsset).where(StationaryAsset.id == asset_id)
+        query = (
+            select(StationaryAsset)
+            .options(
+                joinedload(StationaryAsset.patient),
+                joinedload(StationaryAsset.organization),
+            )
+            .where(StationaryAsset.id == asset_id)
+        )
         result = await self._async_db_session.execute(query)
         asset = result.scalar_one_or_none()
 
@@ -36,7 +45,14 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         return None
 
     async def get_by_bg_asset_id(self, bg_asset_id: str) -> Optional[StationaryAssetDomain]:
-        query = select(StationaryAsset).where(StationaryAsset.bg_asset_id == bg_asset_id)
+        query = (
+            select(StationaryAsset)
+            .options(
+                joinedload(StationaryAsset.patient),
+                joinedload(StationaryAsset.organization),
+            )
+            .where(StationaryAsset.bg_asset_id == bg_asset_id)
+        )
         result = await self._async_db_session.execute(query)
         asset = result.scalar_one_or_none()
 
@@ -50,7 +66,13 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
             page: int = 1,
             limit: int = 30,
     ) -> List[StationaryAssetDomain]:
-        query = select(StationaryAsset)
+        query = (
+            select(StationaryAsset)
+            .options(
+                joinedload(StationaryAsset.patient),
+                joinedload(StationaryAsset.organization),
+            )
+        )
 
         # Применяем фильтры
         query = self._apply_filters(query, filters)
@@ -83,16 +105,35 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         await self._async_db_session.flush()
         await self._async_db_session.refresh(db_asset)
 
-        return map_stationary_asset_db_to_domain(db_asset)
+        # Загружаем связанные данные
+        query = (
+            select(StationaryAsset)
+            .options(
+                joinedload(StationaryAsset.patient),
+                joinedload(StationaryAsset.organization),
+            )
+            .where(StationaryAsset.id == db_asset.id)
+        )
+        result = await self._async_db_session.execute(query)
+        db_asset_with_relations = result.scalar_one()
+
+        return map_stationary_asset_db_to_domain(db_asset_with_relations)
 
     async def update(self, asset: StationaryAssetDomain) -> StationaryAssetDomain:
-        query = select(StationaryAsset).where(StationaryAsset.id == asset.id)
+        query = (
+            select(StationaryAsset)
+            .options(
+                joinedload(StationaryAsset.patient),
+                joinedload(StationaryAsset.organization),
+            )
+            .where(StationaryAsset.id == asset.id)
+        )
         result = await self._async_db_session.execute(query)
         db_asset = result.scalar_one()
 
         # Обновляем поля
         for field, value in asset.__dict__.items():
-            if hasattr(db_asset, field) and field != 'id':
+            if hasattr(db_asset, field) and field not in ['id', 'created_at', 'patient_data', 'organization_data']:
                 setattr(db_asset, field, value)
 
         await self._async_db_session.flush()
@@ -145,21 +186,12 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         files_result = await self._async_db_session.execute(files_query)
         assets_with_files = files_result.scalar_one()
 
-        # С файлами реабилитации
-        rehab_files_query = select(func.count(StationaryAsset.id)).where(
-            StationaryAsset.has_rehabilitation_files == True
-        )
-        rehab_files_query = self._apply_filters(rehab_files_query, filters)
-        rehab_files_result = await self._async_db_session.execute(rehab_files_query)
-        assets_with_rehabilitation_files = rehab_files_result.scalar_one()
-
         return StationaryAssetStatisticsSchema(
             total_assets=total_assets,
             confirmed_assets=confirmed_assets,
             refused_assets=refused_assets,
             pending_assets=pending_assets,
             assets_with_files=assets_with_files,
-            assets_with_rehabilitation_files=assets_with_rehabilitation_files,
         )
 
     async def bulk_create(self, assets: List[StationaryAssetDomain]) -> List[StationaryAssetDomain]:
@@ -168,10 +200,20 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         self._async_db_session.add_all(db_assets)
         await self._async_db_session.flush()
 
-        for db_asset in db_assets:
-            await self._async_db_session.refresh(db_asset)
+        # Получаем созданные активы со связанными данными
+        asset_ids = [db_asset.id for db_asset in db_assets]
+        query = (
+            select(StationaryAsset)
+            .options(
+                joinedload(StationaryAsset.patient),
+                joinedload(StationaryAsset.organization),
+            )
+            .where(StationaryAsset.id.in_(asset_ids))
+        )
+        result = await self._async_db_session.execute(query)
+        created_assets = result.scalars().all()
 
-        return [map_stationary_asset_db_to_domain(db_asset) for db_asset in db_assets]
+        return [map_stationary_asset_db_to_domain(db_asset) for db_asset in created_assets]
 
     async def exists_by_bg_asset_id(self, bg_asset_id: str) -> bool:
         query = select(func.count(StationaryAsset.id)).where(
@@ -187,16 +229,20 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         # Поиск по пациенту (ФИО или ИИН)
         if filters.get("patient_search"):
             search_term = f"%{filters['patient_search'].lower()}%"
-            query = query.where(
+            query = query.join(SQLAlchemyPatient).where(
                 or_(
-                    func.lower(StationaryAsset.patient_full_name).like(search_term),
-                    StationaryAsset.patient_iin.like(search_term)
+                    func.lower(func.concat(SQLAlchemyPatient.last_name, ' ', SQLAlchemyPatient.first_name, ' ', SQLAlchemyPatient.middle_name)).like(search_term),
+                    SQLAlchemyPatient.iin.like(search_term)
                 )
             )
 
+        # Конкретный пациент
+        if filters.get("patient_id"):
+            query = query.where(StationaryAsset.patient_id == filters["patient_id"])
+
         # ИИН пациента
         if filters.get("patient_iin"):
-            query = query.where(StationaryAsset.patient_iin == filters["patient_iin"])
+            query = query.join(SQLAlchemyPatient).where(SQLAlchemyPatient.iin == filters["patient_iin"])
 
         # Период по дате регистрации
         if filters.get("date_from"):
@@ -212,8 +258,12 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         if filters.get("delivery_status") is not None:
             query = query.where(StationaryAsset.delivery_status == filters["delivery_status"])
 
+        # Медицинские данные
+        if filters.get("diagnosis"):
+            query = query.where(StationaryAsset.diagnosis == filters["diagnosis"])
+
         # Участок и специализация
-        if filters.get("area") is not None:
+        if filters.get("area"):
             query = query.where(StationaryAsset.area == filters["area"])
 
         if filters.get("specialization"):
@@ -223,54 +273,12 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
                 )
             )
 
-        if filters.get("specialist_name"):
+        if filters.get("specialist"):
             query = query.where(
-                func.lower(StationaryAsset.specialist_name).like(
-                    f"%{filters['specialist_name'].lower()}%"
+                func.lower(StationaryAsset.specialist).like(
+                    f"%{filters['specialist'].lower()}%"
                 )
             )
-
-        # Медицинские данные
-        if filters.get("referral_target") is not None:
-            query = query.where(StationaryAsset.referral_target == filters["referral_target"])
-
-        if filters.get("referral_type") is not None:
-            query = query.where(StationaryAsset.referral_type == filters["referral_type"])
-
-        if filters.get("rehabilitation_type") is not None:
-            query = query.where(StationaryAsset.rehabilitation_type == filters["rehabilitation_type"])
-
-        # Организации
-        if filters.get("org_health_care_request_code"):
-            query = query.where(
-                StationaryAsset.org_health_care_request_code == filters["org_health_care_request_code"]
-            )
-
-        if filters.get("org_health_care_direct_code"):
-            query = query.where(
-                StationaryAsset.org_health_care_direct_code == filters["org_health_care_direct_code"]
-            )
-
-        if filters.get("org_health_care_ref_code"):
-            query = query.where(
-                StationaryAsset.org_health_care_ref_code == filters["org_health_care_ref_code"]
-            )
-
-        # Врач
-        if filters.get("direct_doctor"):
-            query = query.where(
-                func.lower(StationaryAsset.direct_doctor).like(
-                    f"%{filters['direct_doctor'].lower()}%"
-                )
-            )
-
-        # Диагноз
-        if filters.get("sick_code"):
-            query = query.where(StationaryAsset.sick_code == filters["sick_code"])
-
-        # Профиль койки
-        if filters.get("bed_profile_code"):
-            query = query.where(StationaryAsset.bed_profile_code == filters["bed_profile_code"])
 
         # Флаги
         if filters.get("has_confirm") is not None:
@@ -282,20 +290,17 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
         if filters.get("has_refusal") is not None:
             query = query.where(StationaryAsset.has_refusal == filters["has_refusal"])
 
-        if filters.get("has_rehabilitation_files") is not None:
-            query = query.where(
-                StationaryAsset.has_rehabilitation_files == filters["has_rehabilitation_files"]
-            )
-
-        # Номер карты
+        # Дополнительные поля
         if filters.get("card_number"):
             query = query.where(StationaryAsset.card_number == filters["card_number"])
 
-        # Исход лечения
-        if filters.get("treatment_outcome"):
+        if filters.get("bg_asset_id"):
+            query = query.where(StationaryAsset.bg_asset_id == filters["bg_asset_id"])
+
+        if filters.get("stay_outcome"):
             query = query.where(
-                func.lower(StationaryAsset.treatment_outcome).like(
-                    f"%{filters['treatment_outcome'].lower()}%"
+                func.lower(StationaryAsset.stay_outcome).like(
+                    f"%{filters['stay_outcome'].lower()}%"
                 )
             )
 

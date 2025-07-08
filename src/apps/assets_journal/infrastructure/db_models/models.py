@@ -1,7 +1,8 @@
 from datetime import datetime, time
 
-from sqlalchemy import Boolean, DateTime, Enum, String, Text, Time
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, Enum, String, Text, Time, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.apps.assets_journal.domain.enums import (
     AssetDeliveryStatusEnum,
@@ -15,6 +16,18 @@ from src.shared.infrastructure.base import (
 )
 
 
+class MedicalOrganization(Base, PrimaryKey):
+    """
+    Модель медицинской организации
+    """
+    __tablename__ = "medical_organizations"
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    address: Mapped[str] = mapped_column(Text, nullable=True)
+    phone: Mapped[str] = mapped_column(String(50), nullable=True)
+
+
 class StationaryAsset(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     """
     Новая модель актива стационара под requests
@@ -25,11 +38,19 @@ class StationaryAsset(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     bg_asset_id: Mapped[str] = mapped_column(String(50), nullable=True, unique=True)
     card_number: Mapped[str] = mapped_column(String(50), nullable=True)
 
-    # Данные пациента
-    patient_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    patient_iin: Mapped[str] = mapped_column(String(12), nullable=False)
-    patient_birth_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    patient_address: Mapped[str] = mapped_column(Text, nullable=True)
+    # Связь с организацией
+    organization_id: Mapped[PG_UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("cat_medical_organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Связь с пациентом
+    patient_id: Mapped[PG_UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("patients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     # Данные о получении актива
     receive_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -69,3 +90,15 @@ class StationaryAsset(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     has_confirm: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     has_files: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     has_refusal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Связи
+    organization = relationship(
+        "SQLAlchemyMedicalOrganizationsCatalogue",
+        foreign_keys=[organization_id],
+        lazy="joined",
+    )
+    patient = relationship(
+        "SQLAlchemyPatient",
+        foreign_keys=[patient_id],
+        lazy="joined",
+    )

@@ -1,5 +1,5 @@
 from datetime import datetime, time
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
@@ -19,11 +19,14 @@ class StationaryAssetResponseSchema(BaseModel):
     bg_asset_id: Optional[str] = None
     card_number: Optional[str] = None
 
-    # Данные пациента
-    patient_full_name: str
-    patient_iin: str
-    patient_birth_date: datetime
-    patient_address: Optional[str] = None
+    # Связь с организацией
+    organization_id: UUID
+
+    # Связь с пациентом
+    patient_id: UUID
+    patient_full_name: Optional[str] = None
+    patient_iin: Optional[str] = None
+    patient_birth_date: Optional[datetime] = None
 
     # Данные о получении актива
     receive_date: datetime
@@ -58,6 +61,9 @@ class StationaryAssetResponseSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    organization_data: Optional[Dict[str, Any]] = None
+    patient_data: Optional[Dict[str, Any]] = None
+
     def _get_status_display(self) -> str:
         """Получить отображаемое название статуса"""
         status_map = {
@@ -87,6 +93,11 @@ class StationaryAssetListItemSchema(BaseModel):
 
     id: UUID  # ID актива
     card_number: str  # Номер стационара
+
+    organization_id: UUID  # ID организации
+    organization_name: Optional[str] = None  # Название организации
+
+    patient_id: UUID  #ID пациента
     patient_full_name: str  # ФИО пациента
     patient_iin: str  # ИИН пациента
     patient_birth_date: datetime  # Дата рождения пациента
@@ -147,4 +158,25 @@ class StationaryAssetStatisticsSchema(BaseModel):
     refused_assets: int
     pending_assets: int
     assets_with_files: int
-    assets_with_rehabilitation_files: int
+
+
+class StationaryAssetsByOrganizationResponseSchema(BaseModel):
+    """Схема ответа для активов по организации"""
+
+    organization_id: int
+    organization_name: str
+    organization_code: str
+    total_assets: int
+    items: List[StationaryAssetListItemSchema]
+    pagination: PaginationMetaDataSchema
+
+
+class PatientStationaryAssetsResponseSchema(BaseModel):
+    """Схема ответа для активов пациента"""
+
+    patient_id: UUID
+    patient_full_name: str
+    patient_iin: str
+    total_assets: int
+    items: List[StationaryAssetListItemSchema]
+    pagination: PaginationMetaDataSchema
