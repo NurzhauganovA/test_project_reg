@@ -23,7 +23,7 @@ class StationaryAssetDomain:
             card_number: Optional[str] = None,
 
             # Данные об организации
-            organization_id: UUID,
+            organization_id: Optional[int],
 
             # Данные о пациенте
             patient_id: UUID,
@@ -199,7 +199,7 @@ class StationaryAssetListItemDomain:
             self,
             id: UUID,
             card_number: Optional[str],
-            organization_name: str,
+            organization_name: Optional[str],
             patient_id: UUID,
             patient_full_name: str,
             patient_iin: str,

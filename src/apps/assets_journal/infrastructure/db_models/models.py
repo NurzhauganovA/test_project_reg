@@ -1,6 +1,6 @@
 from datetime import datetime, time
 
-from sqlalchemy import Boolean, DateTime, Enum, String, Text, Time, ForeignKey
+from sqlalchemy import Boolean, DateTime, Enum, String, Text, Time, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,10 +39,10 @@ class StationaryAsset(Base, PrimaryKey, CreatedAtMixin, ChangedAtMixin):
     card_number: Mapped[str] = mapped_column(String(50), nullable=True)
 
     # Связь с организацией
-    organization_id: Mapped[PG_UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
+    organization_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("cat_medical_organizations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
 
     # Связь с пациентом

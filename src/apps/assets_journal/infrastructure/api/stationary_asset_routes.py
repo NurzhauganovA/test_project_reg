@@ -7,11 +7,11 @@ from fastapi import APIRouter, Depends, status
 
 from src.apps.assets_journal.container import AssetsJournalContainer
 from src.apps.assets_journal.infrastructure.api.schemas.requests.stationary_asset_filter_params import (
-    StationaryAssetFilterParams, OrganizationAssetsFilterParams,
+    StationaryAssetFilterParams,
 )
 from src.apps.assets_journal.infrastructure.api.schemas.requests.stationary_asset_schemas import (
     CreateStationaryAssetSchema,
-    UpdateStationaryAssetSchema, CreateStationaryAssetByPatientIdSchema,
+    UpdateStationaryAssetSchema, CreateStationaryAssetByPatientIdSchema, TransferStationaryAssetSchema,
 )
 from src.apps.assets_journal.infrastructure.api.schemas.responses.stationary_asset_schemas import (
     MultipleStationaryAssetsResponseSchema,
@@ -124,9 +124,8 @@ async def get_stationary_assets(
 )
 @inject
 async def get_stationary_assets_by_organization(
-        organization_id: int,
+        organization_id: int,  # Это path-параметр
         pagination_params: PaginationParams = Depends(),
-        filter_params: OrganizationAssetsFilterParams = Depends(),
         stationary_asset_service: StationaryAssetService = Depends(
             Provide[AssetsJournalContainer.stationary_asset_service]
         ),
@@ -139,9 +138,12 @@ async def get_stationary_assets_by_organization(
     # Получаем информацию об организации
     organization = await medical_org_service.get_by_id(organization_id)
 
-    assets, total_count = await stationary_asset_service.get_assets_by_organization(
+    # Создаем фильтры вручную, включая organization_id
+    filters = {"organization_id": organization_id}
+
+    assets, total_count = await stationary_asset_service.get_assets(
         pagination_params=pagination_params,
-        filter_params=filter_params,
+        filter_params=StationaryAssetFilterParams(**filters),
     )
 
     # Вычисляем метаданные пагинации
@@ -189,14 +191,14 @@ async def get_stationary_assets_by_patient(
         stationary_asset_service: StationaryAssetService = Depends(
             Provide[AssetsJournalContainer.stationary_asset_service]
         ),
-        patient_service: PatientService = Depends(
-            Provide[AssetsJournalContainer.patient_service]
+        patients_service: PatientService = Depends(
+            Provide[AssetsJournalContainer.patients_service]
         ),
 ) -> PatientStationaryAssetsResponseSchema:
     """Получить активы стационара пациента"""
 
     # Получаем информацию о пациенте
-    patient = await patient_service.get_by_id(patient_id)
+    patient = await patients_service.get_by_id(patient_id)
 
     assets, total_count = await stationary_asset_service.get_assets_by_patient(
         patient_id=patient_id,
@@ -273,15 +275,12 @@ async def create_stationary_asset_by_patient_id(
     stationary_asset_service: StationaryAssetService = Depends(
         Provide[AssetsJournalContainer.stationary_asset_service]
     ),
-    patient_service: PatientService = Depends(
-        Provide[AssetsJournalContainer.patient_service]
+    patients_service: PatientService = Depends(
+        Provide[AssetsJournalContainer.patients_service]
     ),
 ) -> StationaryAssetListItemSchema:
     """Создать новый актив стационара по ID пациента"""
-    # Проверяем, существует ли пациент
-    patient = await patient_service.get_by_id(create_schema.patient_id)
-    if not patient:
-        raise ValueError("Пациент с указанным ID не найден")
+    patient = await patients_service.get_by_id(create_schema.patient_id)
 
     # Создаем актив стационара
     asset = await stationary_asset_service.create_asset_by_patient_id(create_schema, patient.id)
@@ -407,3 +406,32 @@ async def load_stationary_assets_from_bg(
     """
     assets = await stationary_asset_service.load_assets_from_bg_file()
     return [map_stationary_asset_domain_to_list_item(asset) for asset in assets]
+
+
+@stationary_assets_router.post(
+    "/stationary-assets/{asset_id}/transfer",
+    response_model=StationaryAssetResponseSchema,
+    summary="Передать актив стационара другой организации",
+    # dependencies=[
+    #     Depends(
+    #         check_user_permissions(
+    #             resources=[{"resource_name": "stationary_assets", "scopes": ["write"]}]
+    #         )
+    #     )
+    # ],
+)
+@inject
+async def transfer_stationary_asset(
+    asset_id: UUID,
+    transfer_data: TransferStationaryAssetSchema,
+    stationary_asset_service: StationaryAssetService = Depends(
+        Provide[AssetsJournalContainer.stationary_asset_service]
+    ),
+) -> StationaryAssetResponseSchema:
+    """Передать актив стационара другой организации"""
+    asset = await stationary_asset_service.transfer_to_organization(
+        asset_id=asset_id,
+        new_organization_id=transfer_data.new_organization_id,
+        transfer_reason=transfer_data.transfer_reason
+    )
+    return map_stationary_asset_domain_to_full_response(asset)

@@ -31,7 +31,7 @@ class AssetsJournalContainer(containers.DeclarativeContainer):
     engine = providers.Dependency(instance_of=AsyncEngine)
 
     # Зависимости от других модулей
-    patient_service = providers.Dependency(instance_of=PatientService)
+    patients_service = providers.Dependency(instance_of=PatientService)
     medical_organizations_catalog_service = providers.Dependency(instance_of=MedicalOrganizationsCatalogService)
 
     # Фабрика сессий
@@ -67,6 +67,6 @@ class AssetsJournalContainer(containers.DeclarativeContainer):
         StationaryAssetService,
         uow=unit_of_work,
         stationary_asset_repository=stationary_asset_repository,
-        patient_service=patient_service,
+        patients_service=patients_service,
         logger=logger,
     )

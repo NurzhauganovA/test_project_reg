@@ -11,7 +11,7 @@ from src.apps.assets_journal.domain.enums import (
 
 
 class StationaryAssetFilterParams:
-    """Параметры фильтрации активов стационара (на основе UI)"""
+    """Параметры фильтрации активов стационара"""
 
     def __init__(
             self,
@@ -67,7 +67,10 @@ class StationaryAssetFilterParams:
             specialist: Optional[str] = Query(
                 None,
                 description="Специалист (например: Малышева А.О.)"
-            )
+            ),
+
+            # ID организации (может быть передан вручную для фильтрации)
+            organization_id: Optional[UUID] = None,
     ):
         self.patient_search = patient_search
         self.patient_id = patient_id
@@ -79,6 +82,7 @@ class StationaryAssetFilterParams:
         self.area = area
         self.specialization = specialization
         self.specialist = specialist
+        self.organization_id = organization_id
 
     def to_dict(self, exclude_none: bool = True) -> dict:
         """Преобразовать в словарь для передачи в репозиторий"""
@@ -95,7 +99,6 @@ class OrganizationAssetsFilterParams:
 
     def __init__(
             self,
-            organization_id: int = Query(..., description="ID организации"),
             date_from: Optional[datetime] = Query(
                 None,
                 description="Дата начала периода"
@@ -109,7 +112,7 @@ class OrganizationAssetsFilterParams:
                 description="Статус актива"
             ),
     ):
-        self.organization_id = organization_id
+        # organization_id убираем отсюда, он будет path-параметром
         self.date_from = date_from
         self.date_to = date_to
         self.status = status

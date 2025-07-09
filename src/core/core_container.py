@@ -159,6 +159,6 @@ class CoreContainer(containers.DeclarativeContainer):
         AssetsJournalContainer,
         logger=logger,
         engine=engine,
-        patient_service=patients_container.patients_service,
+        patients_service=patients_container.patients_service,
         medical_organizations_catalog_service=catalogs_container.medical_organizations_catalog_service,
     )

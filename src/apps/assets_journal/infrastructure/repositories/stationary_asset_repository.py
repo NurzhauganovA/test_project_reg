@@ -228,7 +228,8 @@ class StationaryAssetRepositoryImpl(BaseRepository, StationaryAssetRepositoryInt
 
         # Поиск по пациенту (ФИО или ИИН)
         if filters.get("patient_search"):
-            search_term = f"%{filters['patient_search'].lower()}%"
+            print("PATIENT SEARCH:", filters["patient_search"])
+            search_term = f"%{filters['patient_search']}%"
             query = query.join(SQLAlchemyPatient).where(
                 or_(
                     func.lower(func.concat(SQLAlchemyPatient.last_name, ' ', SQLAlchemyPatient.first_name, ' ', SQLAlchemyPatient.middle_name)).like(search_term),

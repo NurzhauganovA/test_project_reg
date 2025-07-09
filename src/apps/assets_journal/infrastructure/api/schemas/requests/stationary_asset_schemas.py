@@ -18,7 +18,7 @@ class CreateStationaryAssetSchema(BaseModel):
     card_number: str = Field(..., description="Номер стационарной карты пациента")
 
     # Связь с организацией
-    organization_id: UUID = Field(..., description="ID медицинской организации")
+    organization_id: Optional[int] = Field(None, description="ID медицинской организации")
 
     # Связь с пациентом
     patient_iin: str = Field(..., description="ИИН пациента")
@@ -105,7 +105,7 @@ class CreateStationaryAssetByPatientIdSchema(BaseModel):
     card_number: Optional[str] = Field(default=None, description="Номер стационарной карты пациента")
 
     # Связь с организацией
-    organization_id: UUID = Field(..., description="ID медицинской организации")
+    organization_id: Optional[int] = Field(None, description="ID медицинской организации")
 
     # Связь с пациентом
     patient_id: UUID = Field(..., description="ID существующего пациента")
@@ -151,5 +151,20 @@ class CreateStationaryAssetByPatientIdSchema(BaseModel):
                 "specialization": "Педиатрия",
                 "specialist": "Малышева А.О.",
                 "note": "Пациент направлен для дальнейшего наблюдения"
+            }
+        }
+
+
+class TransferStationaryAssetSchema(BaseModel):
+    """Схема для передачи актива стационара другой организации"""
+
+    new_organization_id: int = Field(..., description="ID новой организации")
+    transfer_reason: Optional[str] = Field(default=None, description="Причина передачи")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "new_organization_id": 1,
+                "transfer_reason": "Перенаправление в специализированное отделение"
             }
         }

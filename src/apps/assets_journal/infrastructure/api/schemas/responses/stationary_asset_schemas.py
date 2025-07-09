@@ -20,7 +20,7 @@ class StationaryAssetResponseSchema(BaseModel):
     card_number: Optional[str] = None
 
     # Связь с организацией
-    organization_id: UUID
+    organization_id: Optional[int]
 
     # Связь с пациентом
     patient_id: UUID
@@ -94,7 +94,7 @@ class StationaryAssetListItemSchema(BaseModel):
     id: UUID  # ID актива
     card_number: str  # Номер стационара
 
-    organization_id: UUID  # ID организации
+    organization_id: Optional[int]  # ID организации
     organization_name: Optional[str] = None  # Название организации
 
     patient_id: UUID  #ID пациента

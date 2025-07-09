@@ -1,6 +1,7 @@
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from uuid import UUID
 
 from src.apps.assets_journal.domain.enums import AssetDeliveryStatusEnum, AssetStatusEnum
@@ -140,7 +141,7 @@ class StationaryAssetService:
         :return: Созданная доменная модель актива
         """
         # Находим пациента по ИИН
-        patient = await self._patients_service.get_patient_by_iin(create_schema.patient_iin)
+        patient = await self._patients_service.get_by_iin(create_schema.patient_iin)
         if not patient:
             raise NoInstanceFoundError(
                 status_code=404,
@@ -248,6 +249,53 @@ class StationaryAssetService:
         # Добавление примечания
         if update_schema.note:
             asset.add_note(update_schema.note)
+
+        async with self._uow:
+            updated_asset = await self._uow.stationary_asset_repository.update(asset)
+
+        return updated_asset
+
+    async def transfer_to_organization(
+            self,
+            asset_id: UUID,
+            new_organization_id: UUID,
+            transfer_reason: Optional[str] = None
+    ) -> StationaryAssetDomain:
+        """
+        Передать актив стационара другой организации
+
+        :param asset_id: ID актива
+        :param new_organization_id: ID новой организации
+        :param transfer_reason: Причина передачи
+        :return: Обновленная доменная модель актива
+        """
+        # Получаем существующий актив
+        asset = await self.get_by_id(asset_id)
+
+        # Проверяем, что это не та же организация
+        if asset.organization_id == new_organization_id:
+            raise ValueError(_("Актив уже принадлежит указанной организации."))
+
+        # Логируем передачу
+        old_org_name = asset.organization_data.get('name', 'Неизвестно') if asset.organization_data else 'Неизвестно'
+        self._logger.info(
+            f"Передача актива стационара {asset_id} из организации '{old_org_name}' "
+            f"в организацию с ID '{new_organization_id}'. Причина: {transfer_reason or 'Не указана'}"
+        )
+
+        # Выполняем передачу
+        asset.organization_id = new_organization_id
+        asset.delivery_status = AssetDeliveryStatusEnum.PENDING_DELIVERY
+        asset.status = AssetStatusEnum.REGISTERED  # Сбрасываем статус на зарегистрированный
+        asset.actual_datetime = datetime.utcnow()  # Обновляем фактическую дату и время
+
+        # Добавляем примечание о передаче
+        transfer_note = f"Актив передан другой организации"
+        if transfer_reason:
+            transfer_note += f". Причина: {transfer_reason}"
+
+        current_note = asset.note or ""
+        asset.note = f"{transfer_note}\n{current_note}" if current_note else transfer_note
 
         async with self._uow:
             updated_asset = await self._uow.stationary_asset_repository.update(asset)
